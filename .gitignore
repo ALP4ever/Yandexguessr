@@ -1,0 +1,28 @@
+# Зависимости (самая тяжелая папка)
+node_modules/
+.pnp
+.pnp.js
+
+# Сборка и логи
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Секреты и переменные окружения (ВАЖНО!)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Системные файлы и кэш IDE
+.DS_Store
+.vscode/
+.idea/
+.eslintcache
+node_modules/.cache/
+
+api-key.txt

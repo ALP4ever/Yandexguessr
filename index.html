@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FreeGuessr — Якутия</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: radial-gradient(circle at 20% 20%, #f8fafc, #e2e8f0 55%, #cbd5f5 100%);
+        color: #0f172a;
+        font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      .map-transition {
+        transition: width 220ms ease, height 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+      }
+      .mini-map {
+        width: 320px;
+        height: 220px;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+        transform-origin: bottom right;
+      }
+      .mini-map-width {
+        width: 320px;
+      }
+      .mini-map:hover {
+        width: 420px;
+        height: 300px;
+      }
+      .mini-map-width:hover {
+        width: 420px;
+      }
+      .mini-map.expanded {
+        width: min(92vw, 920px);
+        height: min(70vh, 640px);
+        box-shadow: 0 26px 60px rgba(15, 23, 42, 0.25);
+      }
+      .mini-map-width.expanded {
+        width: min(92vw, 920px);
+      }
+      .glass-panel {
+        background: rgba(15, 23, 42, 0.78);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .score-panel {
+        transition: transform 320ms ease, opacity 240ms ease, width 220ms ease;
+      }
+      .score-panel.hidden {
+        transform: translateY(120%);
+        opacity: 0;
+        pointer-events: none;
+      }
+      .score-panel.visible {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
