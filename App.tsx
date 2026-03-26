@@ -1,78 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StreetView from "./components/StreetView.tsx";
 import MiniMap from "./components/MiniMap.tsx";
-
-declare global {
-  interface Window {
-    ymaps?: any;
-  }
-}
-
-type GameMode = "YAKUTSK" | "SAKHA";
-type GameState = "MODE_SELECT" | "GUESSING" | "LOADING_RESULT" | "RESULT";
-type Language = "ru" | "sah";
-
-type LatLng = {
-  lat: number;
-  lng: number;
-};
-
-type Bounds = {
-  minLat: number;
-  maxLat: number;
-  minLng: number;
-  maxLng: number;
-};
-
-type PlaceResult = {
-  name: string;
-  types: string[];
-};
-
-type SeedLocation = {
-  lat: number;
-  lng: number;
-  radiusMeters: number;
-};
-
-const YANDEX_MAPS_URL = "https://api-maps.yandex.ru/2.1/?lang=ru_RU";
-
-const BOUNDS_BY_MODE: Record<GameMode, Bounds> = {
-  YAKUTSK: {
-    minLat: 61.95,
-    maxLat: 62.1,
-    minLng: 129.55,
-    maxLng: 129.85,
-  },
-  SAKHA: {
-    minLat: 55.0,
-    maxLat: 72.0,
-    minLng: 105.0,
-    maxLng: 160.0,
-  },
-};
-
-const SAKHA_LOCATION_SEEDS: SeedLocation[] = [
-  { lat: 62.0272, lng: 129.7326, radiusMeters: 12000 },
-  { lat: 61.4844, lng: 129.1481, radiusMeters: 8000 },
-  { lat: 56.6546, lng: 124.7203, radiusMeters: 9000 },
-  { lat: 58.6031, lng: 125.3894, radiusMeters: 9000 },
-  { lat: 59.6483, lng: 112.7415, radiusMeters: 9000 },
-  { lat: 60.726, lng: 114.9541, radiusMeters: 9000 },
-  { lat: 63.7553, lng: 121.6247, radiusMeters: 7000 },
-  { lat: 63.286, lng: 118.3319, radiusMeters: 7000 },
-  { lat: 60.3742, lng: 120.435, radiusMeters: 7000 },
-  { lat: 58.9681, lng: 126.2871, radiusMeters: 7000 },
-  { lat: 61.4626, lng: 128.4747, radiusMeters: 6000 },
-];
-
-const ALLOWED_PLACE_TYPES = new Set([
-  "locality",
-  "political",
-  "sublocality",
-  "neighborhood",
-  "administrative_area_level_3",
-]);
+import {
+  type GameMode,
+  type GameState,
+  type GeneratedRound,
+  type Language,
+  type LatLng,
+  type PrefetchedRound,
+} from "./lib/gameConfig.ts";
+import {
+  generateCandidateLocation as sharedGenerateCandidateLocation,
+  getBoundsForMode,
+  haversineKm as calculateHaversineKm,
+  isAllowedPopulatedPlace,
+  isWithinBounds as isLocationWithinBounds,
+  scoreFromDistance as calculateScoreFromDistance,
+} from "./lib/mapUtils.ts";
+import {
+  loadYandexMaps as loadYandexMapsApi,
+  PlacesService as SharedPlacesService,
+  StreetViewService as SharedStreetViewService,
+} from "./lib/yandexMaps.ts";
 
 const UI_TEXT: Record<
   Language,
@@ -80,6 +29,8 @@ const UI_TEXT: Record<
     title: string;
     xp: string;
     streak: string;
+    round: string;
+    roundsShort: string;
     chooseMode: string;
     chooseModeDescription: string;
     yakutskOnly: string;
@@ -98,7 +49,16 @@ const UI_TEXT: Record<
     distance: string;
     score: string;
     nextRound: string;
+    finishGame: string;
     confirm: string;
+    finalResults: string;
+    roundsComplete: string;
+    averageScore: string;
+    totalDistance: string;
+    bestRound: string;
+    shareResult: string;
+    shareSuccess: string;
+    playAgain: string;
     error: string;
   }
 > = {
@@ -106,6 +66,8 @@ const UI_TEXT: Record<
     title: "FREEGUESSR - ЯКУТИЯ",
     xp: "XP",
     streak: "Стрик",
+    round: "Раунд",
+    roundsShort: "из",
     chooseMode: "Выберите режим",
     chooseModeDescription: "Игровые локации подбираются внутри населенных пунктов и в пределах выбранной территории.",
     yakutskOnly: "Только Якутск",
@@ -124,13 +86,24 @@ const UI_TEXT: Record<
     distance: "Дистанция",
     score: "Очки",
     nextRound: "Следующий раунд (Space)",
+    finishGame: "Show final stats",
     confirm: "ПОДТВЕРДИТЬ ОТВЕТ",
+    finalResults: "Final Results",
+    roundsComplete: "Rounds complete",
+    averageScore: "Average score",
+    totalDistance: "Total distance",
+    bestRound: "Best round",
+    shareResult: "Share result",
+    shareSuccess: "Result copied",
+    playAgain: "Play again",
     error: "Ошибка",
   },
   sah: {
     title: "FREEGUESSR - САХА",
     xp: "XP",
     streak: "Стрик",
+    round: "Round",
+    roundsShort: "of",
     chooseMode: "Режим тал",
     chooseModeDescription: "Оонньуу сирдэрэ нэһилиэктэр иһигэр уонна талыллыбыт сир арыллыытыгар булуллар.",
     yakutskOnly: "Якутскай эрэ",
@@ -149,9 +122,26 @@ const UI_TEXT: Record<
     distance: "Ыраахтааһын",
     score: "Баал",
     nextRound: "Аныгы раунд (Space)",
+    finishGame: "Final results",
     confirm: "ЭППИЭТИН БИГЭЛЭЭ",
+    finalResults: "Final Results",
+    roundsComplete: "Rounds complete",
+    averageScore: "Average score",
+    totalDistance: "Total distance",
+    bestRound: "Best round",
+    shareResult: "Share result",
+    shareSuccess: "Result copied",
+    playAgain: "Play again",
     error: "Алҕас",
   },
+};
+
+const TOTAL_ROUNDS = 5;
+
+type RoundSummary = {
+  roundNumber: number;
+  score: number;
+  distanceKm: number;
 };
 
 const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
@@ -349,12 +339,24 @@ class StreetViewService {
 
 class PlacesService {
   private ymaps: any;
+  private nearbyCache = new Map<string, { results: PlaceResult[]; status: "OK" | "ZERO_RESULTS" }>();
 
   constructor(ymaps: any) {
     this.ymaps = ymaps;
   }
 
   async nearbySearch(request: { location: LatLng; radius: number }) {
+    const cacheKey = [
+      request.location.lat.toFixed(4),
+      request.location.lng.toFixed(4),
+      Math.round(request.radius),
+    ].join(":");
+
+    const cached = this.nearbyCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const { deltaLat, deltaLng } = metersToDelta(request.radius, request.location.lat);
     const bbox = [
       [request.location.lat - deltaLat, request.location.lng - deltaLng],
@@ -376,10 +378,13 @@ class PlacesService {
       results.push({ name, types });
     });
 
-    return {
+    const response = {
       results,
       status: results.length > 0 ? ("OK" as const) : ("ZERO_RESULTS" as const),
     };
+
+    this.nearbyCache.set(cacheKey, response);
+    return response;
   }
 }
 
@@ -409,22 +414,36 @@ const App = () => {
   const [gameMode, setGameMode] = useState<GameMode | null>(null);
   const [gameState, setGameState] = useState<GameState>("MODE_SELECT");
   const [targetLocation, setTargetLocation] = useState<LatLng | null>(null);
+  const [targetPanorama, setTargetPanorama] = useState<any>(null);
+  const [prefetchedRound, setPrefetchedRound] = useState<PrefetchedRound | null>(null);
   const [guessLocation, setGuessLocation] = useState<LatLng | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [score, setScore] = useState<number>(0);
   const [totalXP, setTotalXP] = useState<number>(0);
-  const [streak, setStreak] = useState<number>(0);
-  const [regionResult, setRegionResult] = useState<boolean | null>(null);
+  const [currentRound, setCurrentRound] = useState<number>(1);
+  const [roundHistory, setRoundHistory] = useState<RoundSummary[]>([]);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>(UI_TEXT.ru.loadingMap);
   const [error, setError] = useState<string | null>(null);
   const generationLock = useRef(false);
+  const prefetchedRoundRef = useRef<PrefetchedRound | null>(null);
+  const prefetchPromiseRef = useRef<Promise<void> | null>(null);
 
   const t = UI_TEXT[language];
+  const isFinalRound = currentRound >= TOTAL_ROUNDS;
+  const averageScore = roundHistory.length
+    ? Math.round(roundHistory.reduce((sum, round) => sum + round.score, 0) / roundHistory.length)
+    : 0;
+  const totalDistance = roundHistory.reduce((sum, round) => sum + round.distanceKm, 0);
+  const bestRound = roundHistory.reduce<RoundSummary | null>(
+    (best, round) => (!best || round.score > best.score ? round : best),
+    null
+  );
 
   useEffect(() => {
     let mounted = true;
 
-    loadYandexMaps()
+    loadYandexMapsApi()
       .then((api) => {
         if (mounted) {
           setYmapsApi(api);
@@ -441,11 +460,12 @@ const App = () => {
     };
   }, [t.error]);
 
-  const streetViewService = useMemo(() => (ymapsApi ? new StreetViewService(ymapsApi) : null), [ymapsApi]);
-  const placesService = useMemo(() => (ymapsApi ? new PlacesService(ymapsApi) : null), [ymapsApi]);
+  const streetViewService = useMemo(() => (ymapsApi ? new SharedStreetViewService(ymapsApi) : null), [ymapsApi]);
+  const placesService = useMemo(() => (ymapsApi ? new SharedPlacesService(ymapsApi) : null), [ymapsApi]);
+  const isMapReady = Boolean(ymapsApi && streetViewService && placesService);
 
   const generateValidLocation = useCallback(
-    async (mode: GameMode, attempt = 0): Promise<LatLng> => {
+    async (mode: GameMode, attempt = 0): Promise<GeneratedRound> => {
       if (!streetViewService || !placesService) {
         throw new Error("Сервисы карты недоступны");
       }
@@ -454,8 +474,8 @@ const App = () => {
         throw new Error("Не удалось найти подходящую локацию");
       }
 
-      const bounds = BOUNDS_BY_MODE[mode];
-      const candidate = generateCandidateLocation(mode, bounds);
+      const bounds = getBoundsForMode(mode);
+      const candidate = sharedGenerateCandidateLocation(mode, bounds);
       const panorama = await streetViewService.getPanorama({
         location: candidate,
         radius: mode === "SAKHA" ? 25000 : 10000,
@@ -466,7 +486,7 @@ const App = () => {
         return generateValidLocation(mode, attempt + 1);
       }
 
-      if (!isWithinBounds(panorama.location, bounds)) {
+      if (!isLocationWithinBounds(panorama.location, bounds)) {
         return generateValidLocation(mode, attempt + 1);
       }
 
@@ -479,17 +499,46 @@ const App = () => {
         return generateValidLocation(mode, attempt + 1);
       }
 
-      const isPopulated = nearby.results.some((result) =>
-        result.types.some((type) => ALLOWED_PLACE_TYPES.has(type))
-      );
+      const isPopulated = nearby.results.some((result) => isAllowedPopulatedPlace(result.types));
 
       if (!isPopulated) {
         return generateValidLocation(mode, attempt + 1);
       }
 
-      return panorama.location;
+      return {
+        location: panorama.location,
+        panorama: panorama.panorama,
+      };
     },
     [placesService, streetViewService]
+  );
+
+  const prefetchRound = useCallback(
+    (mode: GameMode) => {
+      if (
+        !streetViewService ||
+        !placesService ||
+        prefetchPromiseRef.current ||
+        prefetchedRoundRef.current?.mode === mode
+      ) {
+        return;
+      }
+
+      prefetchPromiseRef.current = (async () => {
+        try {
+          const data = await generateValidLocation(mode);
+          const nextRound = { mode, data };
+          prefetchedRoundRef.current = nextRound;
+          setPrefetchedRound(nextRound);
+        } catch {
+          prefetchedRoundRef.current = null;
+          setPrefetchedRound(null);
+        } finally {
+          prefetchPromiseRef.current = null;
+        }
+      })();
+    },
+    [generateValidLocation, placesService, streetViewService]
   );
 
   const startNewRound = useCallback(
@@ -502,52 +551,51 @@ const App = () => {
       setError(null);
       setLoadingMessage(t.loadingRound);
       setGameState("LOADING_RESULT");
+      setShareFeedback(null);
       setGuessLocation(null);
       setTargetLocation(null);
-      setRegionResult(null);
+      setTargetPanorama(null);
       setDistance(null);
       setScore(0);
 
       try {
-        const location = await generateValidLocation(mode);
-        setTargetLocation(location);
+        const bufferedRound =
+          prefetchedRoundRef.current?.mode === mode ? prefetchedRoundRef.current.data : null;
+
+        if (prefetchedRoundRef.current?.mode === mode) {
+          prefetchedRoundRef.current = null;
+          setPrefetchedRound(null);
+        }
+
+        const roundData = bufferedRound ?? (await generateValidLocation(mode));
+        setTargetLocation(roundData.location);
+        setTargetPanorama(roundData.panorama);
         setGameState("GUESSING");
+        prefetchRound(mode);
       } catch (err) {
         setError(err instanceof Error ? err.message : t.error);
       } finally {
         generationLock.current = false;
       }
     },
-    [generateValidLocation, t.error, t.loadingRound]
+    [generateValidLocation, prefetchRound, t.error, t.loadingRound]
   );
 
   const handleModeSelect = useCallback(
     (mode: GameMode) => {
+      if (!ymapsApi || !streetViewService || !placesService) {
+        return;
+      }
+      setCurrentRound(1);
+      setRoundHistory([]);
+      setTotalXP(0);
+      setDistance(null);
+      setScore(0);
+      setShareFeedback(null);
       setGameMode(mode);
       startNewRound(mode);
     },
-    [startNewRound]
-  );
-
-  const resolveRegionMatch = useCallback(
-    async (target: LatLng, guess: LatLng) => {
-      if (!ymapsApi) {
-        return false;
-      }
-
-      try {
-        const targetGeo = await ymapsApi.geocode([target.lat, target.lng], { results: 1 });
-        const guessGeo = await ymapsApi.geocode([guess.lat, guess.lng], { results: 1 });
-        const targetObj = targetGeo.geoObjects.get(0);
-        const guessObj = guessGeo.geoObjects.get(0);
-        const targetRegion = extractAdminLevel1(targetObj);
-        const guessRegion = extractAdminLevel1(guessObj);
-        return isSakhaRegion(targetRegion) && isSakhaRegion(guessRegion);
-      } catch {
-        return false;
-      }
-    },
-    [ymapsApi]
+    [placesService, startNewRound, streetViewService, ymapsApi]
   );
 
   const handleConfirmGuess = useCallback(async () => {
@@ -558,24 +606,86 @@ const App = () => {
     setGameState("LOADING_RESULT");
     setLoadingMessage(t.checkingResult);
 
-    const distanceKm = haversineKm(targetLocation, guessLocation);
-    const roundScore = scoreFromDistance(distanceKm);
-    const regionMatch = await resolveRegionMatch(targetLocation, guessLocation);
+    const distanceKm = calculateHaversineKm(targetLocation, guessLocation);
+    const roundScore = calculateScoreFromDistance(distanceKm);
+    const nextRoundSummary = {
+      roundNumber: currentRound,
+      score: roundScore,
+      distanceKm,
+    };
 
     setDistance(distanceKm);
     setScore(roundScore);
     setTotalXP((prev) => prev + roundScore);
-    setRegionResult(regionMatch);
-    setStreak((prev) => (regionMatch ? prev + 1 : 0));
-    setGameState("RESULT");
-  }, [gameMode, guessLocation, resolveRegionMatch, t.checkingResult, targetLocation]);
+    setRoundHistory((prev) => [...prev, nextRoundSummary]);
+    setGameState(isFinalRound ? "FINAL_RESULT" : "RESULT");
+  }, [currentRound, gameMode, guessLocation, isFinalRound, t.checkingResult, targetLocation]);
 
   const handleNextRound = useCallback(() => {
     if (!gameMode) {
       return;
     }
+    setCurrentRound((prev) => prev + 1);
     startNewRound(gameMode);
   }, [gameMode, startNewRound]);
+
+  const handlePlayAgain = useCallback(() => {
+    setGameMode(null);
+    setGameState("MODE_SELECT");
+    setCurrentRound(1);
+    setRoundHistory([]);
+    setTotalXP(0);
+    setGuessLocation(null);
+    setTargetLocation(null);
+    setTargetPanorama(null);
+    setDistance(null);
+    setScore(0);
+    setShareFeedback(null);
+    prefetchedRoundRef.current = null;
+    prefetchPromiseRef.current = null;
+    setPrefetchedRound(null);
+  }, []);
+
+  const handleShareResults = useCallback(async () => {
+    if (!gameMode || roundHistory.length === 0) {
+      return;
+    }
+
+    const shareText = [
+      `${t.title}`,
+      `${t.finalResults}: ${totalXP} XP`,
+      `${t.roundsComplete}: ${roundHistory.length}/${TOTAL_ROUNDS}`,
+      `${t.averageScore}: ${averageScore}`,
+      `${t.totalDistance}: ${totalDistance.toFixed(2)} km`,
+      bestRound ? `${t.bestRound}: #${bestRound.roundNumber} (${bestRound.score})` : "",
+      `Mode: ${gameMode}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: shareText });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+      } else {
+        throw new Error("Share unavailable");
+      }
+
+      setShareFeedback(t.shareSuccess);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(shareText);
+        setShareFeedback(t.shareSuccess);
+      } catch {
+        setShareFeedback("Share unavailable");
+      }
+    }
+  }, [averageScore, bestRound, gameMode, roundHistory.length, t, totalDistance, totalXP]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -609,13 +719,15 @@ const App = () => {
   return (
     <div className="relative h-full w-full">
       <header className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between px-6 py-4">
-        <div className="glass-panel rounded-full px-4 py-2 text-sm font-semibold tracking-wide text-white">{t.title}</div>
+        <div className="glass-panel rounded-full px-5 py-2 text-sm font-semibold tracking-wide text-white">{t.title}</div>
         <div className="flex items-center gap-3 text-xs font-semibold text-slate-900">
+          {gameMode && gameState !== "MODE_SELECT" && (
+            <div className="rounded-full bg-white/90 px-3 py-1 shadow">
+              {t.round}: {Math.min(currentRound, TOTAL_ROUNDS)} {t.roundsShort} {TOTAL_ROUNDS}
+            </div>
+          )}
           <div className="rounded-full bg-white/90 px-3 py-1 shadow">
             {t.xp}: {totalXP}
-          </div>
-          <div className="rounded-full bg-white/90 px-3 py-1 shadow">
-            {t.streak}: {streak}
           </div>
         </div>
       </header>
@@ -625,7 +737,7 @@ const App = () => {
           {settingsOpen && (
             <div className="glass-panel rounded-3xl px-5 py-4 text-white shadow-2xl">
               <div className="text-sm font-semibold">{t.settings}</div>
-              <div className="mt-3 text-xs uppercase tracking-[0.18em] text-white/60">{t.language}</div>
+              <div className="mt-3 text-xs uppercase text-white/60">{t.language}</div>
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => setLanguage("ru")}
@@ -672,24 +784,115 @@ const App = () => {
             <p className="mt-2 text-sm opacity-80">{t.chooseModeDescription}</p>
             <div className="mt-6 grid gap-4">
               <button
+                disabled={!isMapReady}
                 onClick={() => handleModeSelect("YAKUTSK")}
-                className="rounded-2xl bg-emerald-400/90 px-5 py-4 text-left text-sm font-semibold text-slate-900 shadow-lg transition hover:scale-[1.02]"
+                className={`rounded-2xl px-5 py-4 text-left text-sm font-semibold text-slate-900 shadow-lg transition ${
+                  isMapReady
+                    ? "bg-emerald-400/90 hover:scale-[1.02]"
+                    : "cursor-not-allowed bg-slate-300/70 text-slate-600 opacity-70"
+                }`}
               >
                 {t.yakutskOnly}
               </button>
               <button
+                disabled={!isMapReady}
                 onClick={() => handleModeSelect("SAKHA")}
-                className="rounded-2xl bg-sky-300/90 px-5 py-4 text-left text-sm font-semibold text-slate-900 shadow-lg transition hover:scale-[1.02]"
+                className={`rounded-2xl px-5 py-4 text-left text-sm font-semibold text-slate-900 shadow-lg transition ${
+                  isMapReady
+                    ? "bg-sky-300/90 hover:scale-[1.02]"
+                    : "cursor-not-allowed bg-slate-300/70 text-slate-600 opacity-70"
+                }`}
               >
                 {t.allSakha}
               </button>
+            </div>
+            {!isMapReady && <p className="mt-4 text-sm opacity-80">{t.loadingMap}</p>}
+          </div>
+        </div>
+      )}
+
+      {gameState === "FINAL_RESULT" && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-6">
+          <div className="glass-panel w-full max-w-2xl rounded-3xl px-8 py-8 text-white shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-white/60">{t.finalResults}</div>
+                <h2 className="mt-2 text-3xl font-semibold">{totalXP} XP</h2>
+                <p className="mt-2 text-sm text-white/75">
+                  {t.roundsComplete}: {roundHistory.length}/{TOTAL_ROUNDS}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-4 py-3 text-right">
+                <div className="text-xs text-white/60">{t.averageScore}</div>
+                <div className="text-2xl font-semibold">{averageScore}</div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl bg-white/8 px-4 py-4">
+                <div className="text-xs text-white/60">{t.totalDistance}</div>
+                <div className="mt-2 text-xl font-semibold">{totalDistance.toFixed(2)} km</div>
+              </div>
+              <div className="rounded-2xl bg-white/8 px-4 py-4">
+                <div className="text-xs text-white/60">{t.bestRound}</div>
+                <div className="mt-2 text-xl font-semibold">
+                  {bestRound ? `#${bestRound.roundNumber}` : "-"}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/8 px-4 py-4">
+                <div className="text-xs text-white/60">{t.score}</div>
+                <div className="mt-2 text-xl font-semibold">{bestRound ? bestRound.score : 0}</div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3">
+              {roundHistory.map((round) => (
+                <div
+                  key={round.roundNumber}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/6 px-4 py-3"
+                >
+                  <div className="font-semibold">
+                    {t.round} {round.roundNumber}
+                  </div>
+                  <div className="text-sm text-white/75">{round.distanceKm.toFixed(2)} km</div>
+                  <div className="text-lg font-semibold">{round.score}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-white/70">{shareFeedback ?? ""}</div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleShareResults}
+                  className="rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
+                >
+                  {t.shareResult}
+                </button>
+                <button
+                  onClick={handlePlayAgain}
+                  className="rounded-full bg-sky-300 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
+                >
+                  {t.playAgain}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       <main className="h-full w-full">
-        {ymapsApi && targetLocation && <StreetView ymaps={ymapsApi} location={targetLocation} />}
+        {ymapsApi && targetLocation && (
+          <StreetView ymaps={ymapsApi} location={targetLocation} panorama={targetPanorama} />
+        )}
+        {ymapsApi && prefetchedRound && prefetchedRound.mode === gameMode && (
+          <StreetView
+            ymaps={ymapsApi}
+            location={prefetchedRound.data.location}
+            panorama={prefetchedRound.data.panorama}
+            hidden
+          />
+        )}
         {!ymapsApi && (
           <div className="flex h-full items-center justify-center text-lg font-semibold text-slate-700">{t.loadingMap}</div>
         )}
@@ -703,14 +906,6 @@ const App = () => {
             }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className={`text-sm font-semibold ${regionResult ? "text-emerald-300" : "text-rose-300"}`}>
-                  {regionResult ? t.correctRegion : t.wrongRegion}
-                </div>
-                <div className="text-xs opacity-75">
-                  {t.region}: Республика Саха (Якутия)
-                </div>
-              </div>
               <div className="text-right">
                 <div className="text-sm opacity-80">{t.distance}</div>
                 <div className="text-2xl font-semibold">{distance ? distance.toFixed(2) : "0.00"} км</div>
@@ -720,10 +915,10 @@ const App = () => {
                 <div className="text-2xl font-semibold">{score}</div>
               </div>
               <button
-                onClick={handleNextRound}
+                onClick={isFinalRound ? handleShareResults : handleNextRound}
                 className="rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
               >
-                {t.nextRound}
+                {isFinalRound ? t.finishGame : t.nextRound}
               </button>
             </div>
           </div>

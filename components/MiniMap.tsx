@@ -1,19 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-
-type GameMode = "YAKUTSK" | "SAKHA";
-type GameState = "MODE_SELECT" | "GUESSING" | "LOADING_RESULT" | "RESULT";
-
-type LatLng = {
-  lat: number;
-  lng: number;
-};
-
-type Bounds = {
-  minLat: number;
-  maxLat: number;
-  minLng: number;
-  maxLng: number;
-};
+import { BOUNDS_BY_MODE, type GameMode, type GameState, type LatLng } from "../lib/gameConfig.ts";
 
 type MiniMapProps = {
   ymaps: any;
@@ -27,21 +13,6 @@ type MiniMapProps = {
   confirmLabel: string;
 };
 
-const BOUNDS_BY_MODE: Record<GameMode, Bounds> = {
-  YAKUTSK: {
-    minLat: 61.95,
-    maxLat: 62.1,
-    minLng: 129.55,
-    maxLng: 129.85,
-  },
-  SAKHA: {
-    minLat: 55.0,
-    maxLat: 72.0,
-    minLng: 105.0,
-    maxLng: 160.0,
-  },
-};
-
 const MiniMap = ({
   ymaps,
   mode,
@@ -53,6 +24,7 @@ const MiniMap = ({
   confirmDisabled,
   confirmLabel,
 }: MiniMapProps) => {
+  const collapsedSize = { width: 320, height: 220 };
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const guessPlacemarkRef = useRef<any>(null);
@@ -60,6 +32,10 @@ const MiniMap = ({
   const polylineRef = useRef<any>(null);
   const clickHandlerRef = useRef<any>(null);
   const [hovered, setHovered] = useState(false);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
 
   const modeBounds = useMemo(() => BOUNDS_BY_MODE[mode], [mode]);
   const modeCenter = useMemo(
@@ -67,6 +43,45 @@ const MiniMap = ({
     [modeBounds]
   );
   const startZoom = mode === "YAKUTSK" ? 10 : 3;
+  const expanded = hovered || gameState === "RESULT";
+  const expandedSize = useMemo(
+    () => ({
+      width: Math.min(viewportSize.width * 0.92, 920),
+      height: Math.min(viewportSize.height * 0.7, 640),
+    }),
+    [viewportSize.height, viewportSize.width]
+  );
+  const mapSize = expanded ? expandedSize : collapsedSize;
+
+  const removeGeoObject = (map: any, ref: React.MutableRefObject<any>) => {
+    if (!ref.current) {
+      return;
+    }
+
+    map.geoObjects.remove(ref.current);
+    ref.current = null;
+  };
+
+  const removeClickHandler = (map: any) => {
+    if (!clickHandlerRef.current) {
+      return;
+    }
+
+    map.events.remove("click", clickHandlerRef.current);
+    clickHandlerRef.current = null;
+  };
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (!ymaps || !mapRef.current || mapInstanceRef.current) {
@@ -90,6 +105,10 @@ const MiniMap = ({
     mapInstanceRef.current = map;
 
     return () => {
+      removeClickHandler(map);
+      removeGeoObject(map, guessPlacemarkRef);
+      removeGeoObject(map, targetPlacemarkRef);
+      removeGeoObject(map, polylineRef);
       map.destroy();
       mapInstanceRef.current = null;
     };
@@ -110,10 +129,7 @@ const MiniMap = ({
       return;
     }
 
-    if (clickHandlerRef.current) {
-      map.events.remove("click", clickHandlerRef.current);
-      clickHandlerRef.current = null;
-    }
+    removeClickHandler(map);
 
     if (gameState === "GUESSING") {
       const handler = (event: any) => {
@@ -146,9 +162,8 @@ const MiniMap = ({
       } else {
         guessPlacemarkRef.current.geometry.setCoordinates([guessLocation.lat, guessLocation.lng]);
       }
-    } else if (guessPlacemarkRef.current) {
-      map.geoObjects.remove(guessPlacemarkRef.current);
-      guessPlacemarkRef.current = null;
+    } else {
+      removeGeoObject(map, guessPlacemarkRef);
     }
   }, [guessLocation, ymaps]);
 
@@ -172,9 +187,8 @@ const MiniMap = ({
       } else {
         targetPlacemarkRef.current.geometry.setCoordinates([targetLocation.lat, targetLocation.lng]);
       }
-    } else if (targetPlacemarkRef.current) {
-      map.geoObjects.remove(targetPlacemarkRef.current);
-      targetPlacemarkRef.current = null;
+    } else {
+      removeGeoObject(map, targetPlacemarkRef);
     }
   }, [gameState, targetLocation, ymaps]);
 
@@ -184,10 +198,7 @@ const MiniMap = ({
       return;
     }
 
-    if (polylineRef.current) {
-      map.geoObjects.remove(polylineRef.current);
-      polylineRef.current = null;
-    }
+    removeGeoObject(map, polylineRef);
 
     if (gameState === "RESULT" && targetLocation && guessLocation) {
       polylineRef.current = new ymaps.Polyline(
@@ -233,21 +244,33 @@ const MiniMap = ({
     }
 
     const fit = () => map.container.fitToViewport();
-    const immediate = window.setTimeout(fit, 0);
-    const afterTransition = window.setTimeout(fit, 260);
+    let animationFrameId = 0;
+    let timeoutId = 0;
+    const animationDurationMs = 260;
+    const startedAt = performance.now();
+
+    const syncViewport = (now: number) => {
+      fit();
+
+      if (now - startedAt < animationDurationMs) {
+        animationFrameId = window.requestAnimationFrame(syncViewport);
+      }
+    };
+
+    animationFrameId = window.requestAnimationFrame(syncViewport);
+    timeoutId = window.setTimeout(fit, animationDurationMs);
 
     return () => {
-      window.clearTimeout(immediate);
-      window.clearTimeout(afterTransition);
+      window.cancelAnimationFrame(animationFrameId);
+      window.clearTimeout(timeoutId);
     };
-  }, [hovered, gameState]);
+  }, [gameState, mapSize.height, mapSize.width]);
 
-  const expanded = hovered || gameState === "RESULT";
   const mapClass = `mini-map map-transition ${expanded ? "expanded" : ""}`;
 
   return (
     <div className="relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      <div className={mapClass}>
+      <div className={mapClass} style={mapSize}>
         <div ref={mapRef} className="h-full w-full" />
         {gameState === "GUESSING" && (
           <div className="absolute inset-x-4 bottom-4 flex items-center justify-center">

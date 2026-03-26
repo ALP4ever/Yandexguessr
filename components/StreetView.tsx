@@ -8,9 +8,14 @@ type LatLng = {
 type StreetViewProps = {
   ymaps: any;
   location: LatLng;
+  panorama?: any;
+  hidden?: boolean;
 };
 
-const StreetView = ({ ymaps, location }: StreetViewProps) => {
+const PANORAMA_UNAVAILABLE_MESSAGE =
+  "<div style='display:flex;align-items:center;justify-content:center;height:100%;color:#e2e8f0;font-weight:600;'>ÐŸÐ°Ð½Ð¾Ñ€Ð°Ð¼Ð° Ð½ÐµÐ´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð°</div>";
+
+const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<any>(null);
 
@@ -33,16 +38,20 @@ const StreetView = ({ ymaps, location }: StreetViewProps) => {
       }
 
       try {
-        const panoramas = await ymaps.panorama.locate([location.lat, location.lng], {
-          radius: 1000,
-          layer: "yandex#panorama",
-        });
+        container.innerHTML = "";
 
-        if (!panoramas || panoramas.length === 0) {
+        const panoramaToRender =
+          panorama ??
+          (await ymaps.panorama.locate([location.lat, location.lng], {
+            radius: 1000,
+            layer: "yandex#panorama",
+          }))?.[0];
+
+        if (!panoramaToRender) {
           throw new Error("Panorama not found");
         }
 
-        const player = new ymaps.panorama.Player(container, panoramas[0], {
+        const player = new ymaps.panorama.Player(container, panoramaToRender, {
           controls: [],
           direction: [0, 0],
           span: [90, 60],
@@ -73,9 +82,15 @@ const StreetView = ({ ymaps, location }: StreetViewProps) => {
         playerRef.current = null;
       }
     };
-  }, [location.lat, location.lng, ymaps]);
+  }, [location.lat, location.lng, panorama, ymaps]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div
+      ref={containerRef}
+      className={hidden ? "pointer-events-none absolute -left-[9999px] top-0 h-[360px] w-[640px] opacity-0" : "h-full w-full"}
+      aria-hidden={hidden}
+    />
+  );
 };
 
 export default StreetView;
