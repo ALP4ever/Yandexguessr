@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StreetView from "./components/StreetView.tsx";
 import MiniMap from "./components/MiniMap.tsx";
+import logo from "./logo.svg";
 import {
   type GameMode,
   type GameState,
   type GeneratedRound,
   type Language,
   type LatLng,
-  type PrefetchedRound,
 } from "./lib/gameConfig.ts";
 import {
   generateCandidateLocation as sharedGenerateCandidateLocation,
@@ -86,24 +86,24 @@ const UI_TEXT: Record<
     distance: "Дистанция",
     score: "Очки",
     nextRound: "Следующий раунд (Space)",
-    finishGame: "Show final stats",
+    finishGame: "Показать финальную статистику",
     confirm: "ПОДТВЕРДИТЬ ОТВЕТ",
-    finalResults: "Final Results",
-    roundsComplete: "Rounds complete",
-    averageScore: "Average score",
-    totalDistance: "Total distance",
-    bestRound: "Best round",
-    shareResult: "Share result",
-    shareSuccess: "Result copied",
-    playAgain: "Play again",
+    finalResults: "Финальные результаты",
+    roundsComplete: "Раунд завершён",
+    averageScore: "Средний результат",
+    totalDistance: "Общая дистанця",
+    bestRound: "Лучший раунд",
+    shareResult: "Поделиться результатом",
+    shareSuccess: "Копировать результат",
+    playAgain: "Сыграть снова",
     error: "Ошибка",
   },
   sah: {
     title: "FREEGUESSR - САХА",
     xp: "XP",
     streak: "Стрик",
-    round: "Round",
-    roundsShort: "of",
+    round: "Раунд",
+    roundsShort: "",
     chooseMode: "Режим тал",
     chooseModeDescription: "Оонньуу сирдэрэ нэһилиэктэр иһигэр уонна талыллыбыт сир арыллыытыгар булуллар.",
     yakutskOnly: "Якутскай эрэ",
@@ -122,21 +122,22 @@ const UI_TEXT: Record<
     distance: "Ыраахтааһын",
     score: "Баал",
     nextRound: "Аныгы раунд (Space)",
-    finishGame: "Final results",
+    finishGame: "Түмүк",
     confirm: "ЭППИЭТИН БИГЭЛЭЭ",
-    finalResults: "Final Results",
-    roundsComplete: "Rounds complete",
-    averageScore: "Average score",
-    totalDistance: "Total distance",
-    bestRound: "Best round",
-    shareResult: "Share result",
-    shareSuccess: "Result copied",
-    playAgain: "Play again",
+    finalResults: "Түмүк",
+    roundsComplete: "Хас раунд бүттэ",
+    averageScore: "Орто баал",
+    totalDistance: "Уопсай дистанция",
+    bestRound: "Саамай үчүгэй раунд",
+    shareResult: "Түмүгү үллэстии",
+    shareSuccess: "Куоппуйаламмыт",
+    playAgain: "Өссө төгүл оонньоо",
     error: "Алҕас",
   },
 };
 
 const TOTAL_ROUNDS = 5;
+const APP_TITLE = "Sakhaguessr";
 
 type RoundSummary = {
   roundNumber: number;
@@ -415,7 +416,6 @@ const App = () => {
   const [gameState, setGameState] = useState<GameState>("MODE_SELECT");
   const [targetLocation, setTargetLocation] = useState<LatLng | null>(null);
   const [targetPanorama, setTargetPanorama] = useState<any>(null);
-  const [prefetchedRound, setPrefetchedRound] = useState<PrefetchedRound | null>(null);
   const [guessLocation, setGuessLocation] = useState<LatLng | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [score, setScore] = useState<number>(0);
@@ -426,8 +426,6 @@ const App = () => {
   const [loadingMessage, setLoadingMessage] = useState<string>(UI_TEXT.ru.loadingMap);
   const [error, setError] = useState<string | null>(null);
   const generationLock = useRef(false);
-  const prefetchedRoundRef = useRef<PrefetchedRound | null>(null);
-  const prefetchPromiseRef = useRef<Promise<void> | null>(null);
 
   const t = UI_TEXT[language];
   const isFinalRound = currentRound >= TOTAL_ROUNDS;
@@ -513,34 +511,6 @@ const App = () => {
     [placesService, streetViewService]
   );
 
-  const prefetchRound = useCallback(
-    (mode: GameMode) => {
-      if (
-        !streetViewService ||
-        !placesService ||
-        prefetchPromiseRef.current ||
-        prefetchedRoundRef.current?.mode === mode
-      ) {
-        return;
-      }
-
-      prefetchPromiseRef.current = (async () => {
-        try {
-          const data = await generateValidLocation(mode);
-          const nextRound = { mode, data };
-          prefetchedRoundRef.current = nextRound;
-          setPrefetchedRound(nextRound);
-        } catch {
-          prefetchedRoundRef.current = null;
-          setPrefetchedRound(null);
-        } finally {
-          prefetchPromiseRef.current = null;
-        }
-      })();
-    },
-    [generateValidLocation, placesService, streetViewService]
-  );
-
   const startNewRound = useCallback(
     async (mode: GameMode) => {
       if (generationLock.current) {
@@ -559,26 +529,17 @@ const App = () => {
       setScore(0);
 
       try {
-        const bufferedRound =
-          prefetchedRoundRef.current?.mode === mode ? prefetchedRoundRef.current.data : null;
-
-        if (prefetchedRoundRef.current?.mode === mode) {
-          prefetchedRoundRef.current = null;
-          setPrefetchedRound(null);
-        }
-
-        const roundData = bufferedRound ?? (await generateValidLocation(mode));
+        const roundData = await generateValidLocation(mode);
         setTargetLocation(roundData.location);
         setTargetPanorama(roundData.panorama);
         setGameState("GUESSING");
-        prefetchRound(mode);
       } catch (err) {
         setError(err instanceof Error ? err.message : t.error);
       } finally {
         generationLock.current = false;
       }
     },
-    [generateValidLocation, prefetchRound, t.error, t.loadingRound]
+    [generateValidLocation, t.error, t.loadingRound]
   );
 
   const handleModeSelect = useCallback(
@@ -607,7 +568,7 @@ const App = () => {
     setLoadingMessage(t.checkingResult);
 
     const distanceKm = calculateHaversineKm(targetLocation, guessLocation);
-    const roundScore = calculateScoreFromDistance(distanceKm);
+    const roundScore = calculateScoreFromDistance(distanceKm, gameMode);
     const nextRoundSummary = {
       roundNumber: currentRound,
       score: roundScore,
@@ -618,8 +579,8 @@ const App = () => {
     setScore(roundScore);
     setTotalXP((prev) => prev + roundScore);
     setRoundHistory((prev) => [...prev, nextRoundSummary]);
-    setGameState(isFinalRound ? "FINAL_RESULT" : "RESULT");
-  }, [currentRound, gameMode, guessLocation, isFinalRound, t.checkingResult, targetLocation]);
+    setGameState("RESULT");
+  }, [currentRound, gameMode, guessLocation, t.checkingResult, targetLocation]);
 
   const handleNextRound = useCallback(() => {
     if (!gameMode) {
@@ -628,6 +589,10 @@ const App = () => {
     setCurrentRound((prev) => prev + 1);
     startNewRound(gameMode);
   }, [gameMode, startNewRound]);
+
+  const handleShowFinalResults = useCallback(() => {
+    setGameState("FINAL_RESULT");
+  }, []);
 
   const handlePlayAgain = useCallback(() => {
     setGameMode(null);
@@ -641,9 +606,6 @@ const App = () => {
     setDistance(null);
     setScore(0);
     setShareFeedback(null);
-    prefetchedRoundRef.current = null;
-    prefetchPromiseRef.current = null;
-    setPrefetchedRound(null);
   }, []);
 
   const handleShareResults = useCallback(async () => {
@@ -652,7 +614,7 @@ const App = () => {
     }
 
     const shareText = [
-      `${t.title}`,
+      APP_TITLE,
       `${t.finalResults}: ${totalXP} XP`,
       `${t.roundsComplete}: ${roundHistory.length}/${TOTAL_ROUNDS}`,
       `${t.averageScore}: ${averageScore}`,
@@ -691,13 +653,18 @@ const App = () => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.code === "Space" && gameState === "RESULT") {
         event.preventDefault();
+        if (isFinalRound) {
+          handleShowFinalResults();
+          return;
+        }
+
         handleNextRound();
       }
     };
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [gameState, handleNextRound]);
+  }, [gameState, handleNextRound, handleShowFinalResults, isFinalRound]);
 
   useEffect(() => {
     if (gameState === "LOADING_RESULT" && !targetLocation) {
@@ -718,8 +685,11 @@ const App = () => {
 
   return (
     <div className="relative h-full w-full">
-      <header className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between px-6 py-4">
-        <div className="glass-panel rounded-full px-5 py-2 text-sm font-semibold tracking-wide text-white">{t.title}</div>
+      <header className="absolute left-0 right-0 top-0 z-30 flex items-start justify-between pl-0 pr-6 pt-2">
+        <div className="flex h-20 w-[20rem] -translate-y-1 items-center justify-center gap-4 px-4 text-white">
+          <img src={logo} alt={APP_TITLE} className="h-14 w-14 shrink-0" />
+          <span className="text-[1.15rem] font-semibold tracking-[0.08em]">{APP_TITLE}</span>
+        </div>
         <div className="flex items-center gap-3 text-xs font-semibold text-slate-900">
           {gameMode && gameState !== "MODE_SELECT" && (
             <div className="rounded-full bg-white/90 px-3 py-1 shadow">
@@ -885,14 +855,6 @@ const App = () => {
         {ymapsApi && targetLocation && (
           <StreetView ymaps={ymapsApi} location={targetLocation} panorama={targetPanorama} />
         )}
-        {ymapsApi && prefetchedRound && prefetchedRound.mode === gameMode && (
-          <StreetView
-            ymaps={ymapsApi}
-            location={prefetchedRound.data.location}
-            panorama={prefetchedRound.data.panorama}
-            hidden
-          />
-        )}
         {!ymapsApi && (
           <div className="flex h-full items-center justify-center text-lg font-semibold text-slate-700">{t.loadingMap}</div>
         )}
@@ -915,10 +877,10 @@ const App = () => {
                 <div className="text-2xl font-semibold">{score}</div>
               </div>
               <button
-                onClick={isFinalRound ? handleShareResults : handleNextRound}
+                onClick={isFinalRound ? handleShowFinalResults : handleNextRound}
                 className="rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
               >
-                {isFinalRound ? t.finishGame : t.nextRound}
+                {isFinalRound ? t.finalResults : t.nextRound}
               </button>
             </div>
           </div>

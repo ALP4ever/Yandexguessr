@@ -92,7 +92,7 @@ const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewPro
       <div ref={containerRef} className="h-full w-full" />
       {!hidden && (
         <div
-          className="absolute left-0 top-0 z-10 h-16 w-64 rounded-br-2xl bg-slate-950/90 shadow-xl"
+          className="pointer-events-none absolute left-0 top-0 z-20 h-20 w-[20rem] rounded-br-[1.75rem] bg-slate-950 shadow-2xl"
           aria-hidden="true"
           title="Overlay to block the built-in Yandex Maps link"
         />

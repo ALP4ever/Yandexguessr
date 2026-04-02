@@ -38,7 +38,19 @@ export const haversineKm = (a: LatLng, b: LatLng) => {
   return 2 * r * Math.asin(Math.sqrt(h));
 };
 
-export const scoreFromDistance = (distanceKm: number) => Math.max(0, Math.round(5000 * Math.exp(-distanceKm / 400)));
+const MAX_SCORE = 5000;
+
+const SCORE_HALF_DISTANCE_KM: Record<GameMode, number> = {
+  // Inside Yakutsk even a few kilometers is a meaningful miss, so the curve is much steeper.
+  YAKUTSK: 2.5,
+  // Keep Sakha close to the previous pacing for large-scale rounds.
+  SAKHA: 275,
+};
+
+export const scoreFromDistance = (distanceKm: number, mode: GameMode) => {
+  const halfDistanceKm = SCORE_HALF_DISTANCE_KM[mode];
+  return Math.max(0, Math.round(MAX_SCORE * Math.pow(0.5, distanceKm / halfDistanceKm)));
+};
 
 export const metersToDelta = (meters: number, lat: number) => {
   const deltaLat = meters / 111320;
