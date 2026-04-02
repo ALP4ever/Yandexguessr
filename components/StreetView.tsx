@@ -18,6 +18,9 @@ const PANORAMA_UNAVAILABLE_MESSAGE =
 const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<any>(null);
+  const wrapperClassName = hidden
+    ? "pointer-events-none absolute -left-[9999px] top-0 h-[360px] w-[640px] opacity-0"
+    : "relative h-full w-full";
 
   useEffect(() => {
     if (!ymaps || !containerRef.current) {
@@ -85,11 +88,16 @@ const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewPro
   }, [location.lat, location.lng, panorama, ymaps]);
 
   return (
-    <div
-      ref={containerRef}
-      className={hidden ? "pointer-events-none absolute -left-[9999px] top-0 h-[360px] w-[640px] opacity-0" : "h-full w-full"}
-      aria-hidden={hidden}
-    />
+    <div className={wrapperClassName} aria-hidden={hidden}>
+      <div ref={containerRef} className="h-full w-full" />
+      {!hidden && (
+        <div
+          className="absolute left-0 top-0 z-10 h-16 w-64 rounded-br-2xl bg-slate-950/90 shadow-xl"
+          aria-hidden="true"
+          title="Overlay to block the built-in Yandex Maps link"
+        />
+      )}
+    </div>
   );
 };
 
