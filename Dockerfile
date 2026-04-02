@@ -18,6 +18,6 @@ FROM nginx:1.27-alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 3000
 
 CMD ["/bin/sh", "-c", "if [ -n \"$VITE_YANDEX_MAPS_API_KEY\" ]; then printf '%s' \"$VITE_YANDEX_MAPS_API_KEY\" > /usr/share/nginx/html/api-key.txt; fi && exec nginx -g 'daemon off;'"]
