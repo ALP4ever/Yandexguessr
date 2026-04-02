@@ -24,7 +24,6 @@ const MiniMap = ({
   confirmDisabled,
   confirmLabel,
 }: MiniMapProps) => {
-  const collapsedSize = { width: 320, height: 220 };
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const guessPlacemarkRef = useRef<any>(null);
@@ -43,13 +42,27 @@ const MiniMap = ({
     [modeBounds]
   );
   const startZoom = mode === "YAKUTSK" ? 10 : 3;
-  const expanded = hovered || gameState === "RESULT";
-  const expandedSize = useMemo(
+  const isMobile = viewportSize.width < 640;
+  const collapsedSize = useMemo(
     () => ({
-      width: Math.min(viewportSize.width * 0.92, 920),
-      height: Math.min(viewportSize.height * 0.7, 640),
+      width: isMobile ? Math.min(viewportSize.width - 32, 420) : 320,
+      height: isMobile ? 188 : 220,
     }),
-    [viewportSize.height, viewportSize.width]
+    [isMobile, viewportSize.width]
+  );
+  const expanded = hovered || gameState === "RESULT" || isMobile;
+  const expandedSize = useMemo(
+    () =>
+      isMobile
+        ? {
+            width: Math.min(viewportSize.width - 32, 420),
+            height: Math.min(viewportSize.height * 0.3, 240),
+          }
+        : {
+            width: Math.min(viewportSize.width * 0.92, 920),
+            height: Math.min(viewportSize.height * 0.7, 640),
+          },
+    [isMobile, viewportSize.height, viewportSize.width]
   );
   const mapSize = expanded ? expandedSize : collapsedSize;
 
@@ -232,10 +245,10 @@ const MiniMap = ({
 
       map.setBounds(bounds, {
         checkZoomRange: true,
-        zoomMargin: [20, 20, 350, 20],
+        zoomMargin: isMobile ? [20, 20, 240, 20] : [20, 20, 350, 20],
       });
     }
-  }, [gameState, guessLocation, targetLocation]);
+  }, [gameState, guessLocation, isMobile, targetLocation]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -269,14 +282,20 @@ const MiniMap = ({
   const mapClass = `mini-map map-transition ${expanded ? "expanded" : ""}`;
 
   return (
-    <div className="relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+    <div
+      className="relative"
+      onMouseEnter={isMobile ? undefined : () => setHovered(true)}
+      onMouseLeave={isMobile ? undefined : () => setHovered(false)}
+    >
       <div className={mapClass} style={mapSize}>
         <div ref={mapRef} className="h-full w-full" />
         {gameState === "GUESSING" && (
-          <div className="absolute inset-x-4 bottom-4 flex items-center justify-center">
+          <div className="absolute inset-x-3 bottom-3 flex items-center justify-center sm:inset-x-4 sm:bottom-4">
             <button
-              className={`w-full rounded-xl px-4 py-2 text-sm font-semibold shadow transition ${
-                confirmDisabled ? "bg-slate-200/70 text-slate-400" : "bg-white/90 text-slate-900 hover:scale-[1.02]"
+              className={`w-full rounded-xl px-4 py-3 text-sm font-semibold shadow transition sm:py-2 ${
+                confirmDisabled
+                  ? "bg-slate-200/70 text-slate-400"
+                  : "bg-white/90 text-slate-900 hover:scale-[1.02]"
               }`}
               onClick={onConfirm}
               disabled={confirmDisabled}
