@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:client": "vite",
+    "dev:server": "npm --prefix server run dev",
     "build": "vite build",
+    "build:client": "vite build",
+    "build:server": "npm --prefix server run build",
+    "build:all": "npm run build:client && npm run build:server",
     "preview": "vite preview"
   },
   "dependencies": {

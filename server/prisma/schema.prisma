@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GameMode {
+  YAKUTSK
+  SAKHA
+}
+
+model Player {
+  id             String   @id @default(cuid())
+  name           String
+  normalizedName String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  games          Game[]
+}
+
+model Game {
+  id              String    @id @default(cuid())
+  playerId        String
+  mode            GameMode
+  totalScore      Int
+  averageScore    Int
+  totalDistanceKm Float
+  playedAt        DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  player          Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  rounds          Round[]
+
+  @@index([mode, totalScore, playedAt])
+  @@index([playerId, playedAt])
+}
+
+model Round {
+  id          String   @id @default(cuid())
+  gameId       String
+  roundNumber  Int
+  score        Int
+  distanceKm   Float
+  createdAt    DateTime @default(now())
+  game         Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, roundNumber])
+}

@@ -13,5 +13,6 @@
     "jsx": "react-jsx",
     "strict": true
   },
-  "include": ["**/*.ts", "**/*.tsx"]
+  "include": ["App.tsx", "index.tsx", "components/**/*.ts", "components/**/*.tsx", "lib/**/*.ts", "lib/**/*.tsx", "vite-env.d.ts"],
+  "exclude": ["dist", "node_modules", "server"]
 }

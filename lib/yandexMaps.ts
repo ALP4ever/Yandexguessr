@@ -99,7 +99,11 @@ const getApiKeyCandidateUrls = () => {
 
 const getYandexMapsApiKeyFromEnv = () => {
   const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY?.trim();
-  return apiKey || null;
+  if (!apiKey || apiKey === "your-yandex-maps-api-key") {
+    return null;
+  }
+
+  return apiKey;
 };
 
 const getYandexMapsApiKey = async () => {

@@ -1,4 +1,13 @@
-import { ALLOWED_PLACE_TYPES, BOUNDS_BY_MODE, SAKHA_LOCATION_SEEDS, type Bounds, type GameMode, type LatLng, type SeedLocation } from "./gameConfig.ts";
+import {
+  ALLOWED_PLACE_TYPES,
+  BOUNDS_BY_MODE,
+  SAKHA_LOCATION_SEEDS,
+  YAKUTSK_LOCATION_SEEDS,
+  type Bounds,
+  type GameMode,
+  type LatLng,
+  type SeedLocation,
+} from "./gameConfig.ts";
 
 const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
@@ -79,6 +88,11 @@ const randomLatLngNearSeed = (seed: SeedLocation, bounds: Bounds): LatLng => {
 export const generateCandidateLocation = (mode: GameMode, bounds: Bounds) => {
   if (mode === "SAKHA") {
     const seed = SAKHA_LOCATION_SEEDS[Math.floor(Math.random() * SAKHA_LOCATION_SEEDS.length)];
+    return randomLatLngNearSeed(seed, bounds);
+  }
+
+  if (mode === "YAKUTSK") {
+    const seed = YAKUTSK_LOCATION_SEEDS[Math.floor(Math.random() * YAKUTSK_LOCATION_SEEDS.length)];
     return randomLatLngNearSeed(seed, bounds);
   }
 

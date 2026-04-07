@@ -3,6 +3,12 @@ import StreetView from "./components/StreetView.tsx";
 import MiniMap from "./components/MiniMap.tsx";
 import logo from "./logo.svg";
 import {
+  fetchLeaderboard,
+  submitGameResult,
+  type LeaderboardEntry,
+} from "./lib/backendApi.ts";
+
+import {
   type GameMode,
   type GameState,
   type GeneratedRound,
@@ -138,6 +144,49 @@ const UI_TEXT: Record<
 
 const TOTAL_ROUNDS = 5;
 const APP_TITLE = "Sakhaguessr";
+const LEADERBOARD_TEXT: Record<
+  Language,
+  {
+    playerNamePlaceholder: string;
+    saveResult: string;
+    savingResult: string;
+    resultSaved: string;
+    leaderboardTitle: string;
+    leaderboardLoading: string;
+    leaderboardEmpty: string;
+    nameTooShort: string;
+    leaderboardLoadError: string;
+    saveResultError: string;
+    saveResultSuccess: string;
+  }
+> = {
+  ru: {
+    playerNamePlaceholder: "Ваше имя",
+    saveResult: "Сохранить результат",
+    savingResult: "Сохранение...",
+    resultSaved: "Сохранено",
+    leaderboardTitle: "Лидерборд",
+    leaderboardLoading: "Загрузка...",
+    leaderboardEmpty: "Пока записей нет",
+    nameTooShort: "Введите имя хотя бы из 2 символов",
+    leaderboardLoadError: "Не удалось загрузить лидерборд",
+    saveResultError: "Не удалось сохранить результат",
+    saveResultSuccess: "Результат сохранен",
+  },
+  sah: {
+    playerNamePlaceholder: "Ваше имя",
+    saveResult: "Сохранить результат",
+    savingResult: "Сохранение...",
+    resultSaved: "Сохранено",
+    leaderboardTitle: "Лидерборд",
+    leaderboardLoading: "Загрузка...",
+    leaderboardEmpty: "Пока записей нет",
+    nameTooShort: "Введите имя хотя бы из 2 символов",
+    leaderboardLoadError: "Не удалось загрузить лидерборд",
+    saveResultError: "Не удалось сохранить результат",
+    saveResultSuccess: "Результат сохранен",
+  },
+};
 
 type RoundSummary = {
   roundNumber: number;
@@ -146,6 +195,25 @@ type RoundSummary = {
 };
 
 const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+};
 
 const randomLatLngInBounds = (bounds: Bounds): LatLng => ({
   lat: randomInRange(bounds.minLat, bounds.maxLat),
@@ -203,7 +271,11 @@ const getApiKeyCandidateUrls = () => {
 
 const getYandexMapsApiKeyFromEnv = () => {
   const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY?.trim();
-  return apiKey || null;
+  if (!apiKey || apiKey === "your-yandex-maps-api-key") {
+    return null;
+  }
+
+  return apiKey;
 };
 
 const getYandexMapsApiKey = async () => {
@@ -426,8 +498,17 @@ const App = () => {
   const [loadingMessage, setLoadingMessage] = useState<string>(UI_TEXT.ru.loadingMap);
   const [error, setError] = useState<string | null>(null);
   const generationLock = useRef(false);
+  const [playerName, setPlayerName] = useState("");
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [saveResultFeedback, setSaveResultFeedback] = useState<string | null>(null);
+  const [isSubmittingResult, setIsSubmittingResult] = useState(false);
+  const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
+  const [savedGameId, setSavedGameId] = useState<string | null>(null);
+
 
   const t = UI_TEXT[language];
+  const leaderboardText = LEADERBOARD_TEXT[language];
   const isFinalRound = currentRound >= TOTAL_ROUNDS;
   const averageScore = roundHistory.length
     ? Math.round(roundHistory.reduce((sum, round) => sum + round.score, 0) / roundHistory.length)
@@ -449,7 +530,7 @@ const App = () => {
       })
       .catch((err) => {
         if (mounted) {
-          setError(err instanceof Error ? err.message : t.error);
+          setError(getErrorMessage(err, t.error));
         }
       });
 
@@ -473,40 +554,61 @@ const App = () => {
       }
 
       const bounds = getBoundsForMode(mode);
-      const candidate = sharedGenerateCandidateLocation(mode, bounds);
-      const panorama = await streetViewService.getPanorama({
-        location: candidate,
-        radius: mode === "SAKHA" ? 25000 : 10000,
-        source: "OUTDOOR",
-      });
 
-      if (panorama.status === "ZERO_RESULTS" || !panorama.location) {
+      try {
+        const candidate = sharedGenerateCandidateLocation(mode, bounds);
+        const panorama = await streetViewService.getPanorama({
+          location: candidate,
+          radius: mode === "SAKHA" ? 25000 : 3500,
+          source: "OUTDOOR",
+        });
+
+        if (panorama.status === "ZERO_RESULTS" || !panorama.location) {
+          return generateValidLocation(mode, attempt + 1);
+        }
+
+        if (!isLocationWithinBounds(panorama.location, bounds)) {
+          return generateValidLocation(mode, attempt + 1);
+        }
+
+        if (mode === "YAKUTSK") {
+          return {
+            location: panorama.location,
+            panorama: panorama.panorama,
+          };
+        }
+
+        const nearby = await placesService.nearbySearch({
+          location: panorama.location,
+          radius: 1200,
+        });
+
+        if (nearby.status !== "OK") {
+          return generateValidLocation(mode, attempt + 1);
+        }
+
+        const isPopulated = nearby.results.some((result) => isAllowedPopulatedPlace(result.types));
+
+        if (!isPopulated) {
+          return generateValidLocation(mode, attempt + 1);
+        }
+
+        return {
+          location: panorama.location,
+          panorama: panorama.panorama,
+        };
+      } catch (error) {
+        const message = getErrorMessage(error, "");
+        const isConfigurationError =
+          /api[- ]?key|failed to load|unauthorized|forbidden|access denied/i.test(message);
+
+        if (isConfigurationError) {
+          throw new Error(message);
+        }
+
+        console.warn("Round generation attempt failed, retrying with a new location.", error);
         return generateValidLocation(mode, attempt + 1);
       }
-
-      if (!isLocationWithinBounds(panorama.location, bounds)) {
-        return generateValidLocation(mode, attempt + 1);
-      }
-
-      const nearby = await placesService.nearbySearch({
-        location: panorama.location,
-        radius: mode === "SAKHA" ? 500 : 200,
-      });
-
-      if (nearby.status !== "OK") {
-        return generateValidLocation(mode, attempt + 1);
-      }
-
-      const isPopulated = nearby.results.some((result) => isAllowedPopulatedPlace(result.types));
-
-      if (!isPopulated) {
-        return generateValidLocation(mode, attempt + 1);
-      }
-
-      return {
-        location: panorama.location,
-        panorama: panorama.panorama,
-      };
     },
     [placesService, streetViewService]
   );
@@ -534,7 +636,7 @@ const App = () => {
         setTargetPanorama(roundData.panorama);
         setGameState("GUESSING");
       } catch (err) {
-        setError(err instanceof Error ? err.message : t.error);
+        setError(getErrorMessage(err, t.error));
       } finally {
         generationLock.current = false;
       }
@@ -555,6 +657,13 @@ const App = () => {
       setShareFeedback(null);
       setGameMode(mode);
       startNewRound(mode);
+      setPlayerName("");
+      setLeaderboard([]);
+      setLeaderboardError(null);
+      setSaveResultFeedback(null);
+      setIsSubmittingResult(false);
+      setIsLoadingLeaderboard(false);
+      setSavedGameId(null);
     },
     [placesService, startNewRound, streetViewService, ymapsApi]
   );
@@ -606,7 +715,73 @@ const App = () => {
     setDistance(null);
     setScore(0);
     setShareFeedback(null);
+    setPlayerName("");
+    setLeaderboard([]);
+    setLeaderboardError(null);
+    setSaveResultFeedback(null);
+    setIsSubmittingResult(false);
+    setIsLoadingLeaderboard(false);
+    setSavedGameId(null);
   }, []);
+
+  const loadLeaderboard = useCallback(async () => {
+    if (!gameMode) {
+      return;
+    }
+
+    try {
+      setIsLoadingLeaderboard(true);
+      setLeaderboardError(null);
+      const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
+      setLeaderboard(data.items);
+    } catch (error) {
+      setLeaderboardError(error instanceof Error ? error.message : leaderboardText.leaderboardLoadError);
+    } finally {
+      setIsLoadingLeaderboard(false);
+    }
+  }, [gameMode, leaderboardText.leaderboardLoadError]);
+
+
+  const handleSaveResult = useCallback(async () => {
+  if (!gameMode || roundHistory.length === 0 || savedGameId) {
+    return;
+  }
+
+  const trimmedName = playerName.trim();
+  if (trimmedName.length < 2) {
+    setSaveResultFeedback("Введите имя хотя бы из 2 символов");
+    return;
+  }
+
+  try {
+    setIsSubmittingResult(true);
+    setSaveResultFeedback(null);
+    setLeaderboardError(null);
+
+    const savedGame = await submitGameResult({
+      playerName: trimmedName,
+      mode: gameMode,
+      rounds: roundHistory.map((round) => ({
+        roundNumber: round.roundNumber,
+        score: round.score,
+        distanceKm: round.distanceKm,
+      })),
+    });
+
+    setSavedGameId(savedGame.id);
+    setSaveResultFeedback("Результат сохранён");
+
+    setIsLoadingLeaderboard(true);
+    const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
+    setLeaderboard(data.items);
+  } catch (error) {
+    setLeaderboardError(error instanceof Error ? error.message : "Не удалось сохранить результат");
+  } finally {
+    setIsSubmittingResult(false);
+    setIsLoadingLeaderboard(false);
+  }
+}, [gameMode, playerName, roundHistory, savedGameId]);
+
 
   const handleShareResults = useCallback(async () => {
     if (!gameMode || roundHistory.length === 0) {
@@ -648,6 +823,13 @@ const App = () => {
       }
     }
   }, [averageScore, bestRound, gameMode, roundHistory.length, t, totalDistance, totalXP]);
+
+  useEffect(() => {
+  if (gameState === "FINAL_RESULT" && gameMode) {
+    void loadLeaderboard();
+    }
+  }, [gameMode, gameState, loadLeaderboard]);
+
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -805,9 +987,7 @@ const App = () => {
               </div>
               <div className="rounded-2xl bg-white/8 px-4 py-4">
                 <div className="text-xs text-white/60">{t.bestRound}</div>
-                <div className="mt-2 text-xl font-semibold">
-                  {bestRound ? `#${bestRound.roundNumber}` : "-"}
-                </div>
+                <div className="mt-2 text-xl font-semibold">{bestRound ? `#${bestRound.roundNumber}` : "-"}</div>
               </div>
               <div className="rounded-2xl bg-white/8 px-4 py-4">
                 <div className="text-xs text-white/60">{t.score}</div>
@@ -828,6 +1008,57 @@ const App = () => {
                   <div className="text-lg font-semibold">{round.score}</div>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <input
+                value={playerName}
+                onChange={(event) => setPlayerName(event.target.value)}
+                placeholder={leaderboardText.playerNamePlaceholder}
+                className="min-w-[220px] flex-1 rounded-xl bg-white/10 px-4 py-3 text-white outline-none placeholder:text-white/50"
+                maxLength={24}
+              />
+              <button
+                onClick={handleSaveResult}
+                disabled={isSubmittingResult || Boolean(savedGameId)}
+                className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow transition disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSubmittingResult
+                  ? leaderboardText.savingResult
+                  : savedGameId
+                    ? leaderboardText.resultSaved
+                    : leaderboardText.saveResult}
+              </button>
+            </div>
+
+            {(saveResultFeedback || leaderboardError) && (
+              <div className="mt-3 text-sm">
+                {saveResultFeedback && <div className="text-emerald-300">{saveResultFeedback}</div>}
+                {leaderboardError && <div className="text-rose-300">{leaderboardError}</div>}
+              </div>
+            )}
+
+            <div className="mt-6 rounded-2xl bg-white/8 px-4 py-4">
+              <div className="text-sm font-semibold text-white">{leaderboardText.leaderboardTitle}</div>
+
+              {isLoadingLeaderboard && (
+                <div className="mt-3 text-sm text-white/70">{leaderboardText.leaderboardLoading}</div>
+              )}
+
+              {!isLoadingLeaderboard && leaderboard.length === 0 && !leaderboardError && (
+                <div className="mt-3 text-sm text-white/70">{leaderboardText.leaderboardEmpty}</div>
+              )}
+
+              <div className="mt-3 grid gap-2">
+                {leaderboard.map((entry, index) => (
+                  <div key={entry.id} className="flex items-center justify-between rounded-xl bg-white/6 px-4 py-3">
+                    <div className="font-medium">
+                      {index + 1}. {entry.playerName}
+                    </div>
+                    <div className="text-sm text-white/75">{entry.totalScore} XP</div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
@@ -911,3 +1142,4 @@ const App = () => {
 };
 
 export default App;
+

@@ -64,6 +64,15 @@ export const SAKHA_LOCATION_SEEDS: SeedLocation[] = [
   { lat: 61.4626, lng: 128.4747, radiusMeters: 6000 },
 ];
 
+export const YAKUTSK_LOCATION_SEEDS: SeedLocation[] = [
+  { lat: 62.0272, lng: 129.7326, radiusMeters: 2500 },
+  { lat: 62.035, lng: 129.675, radiusMeters: 2200 },
+  { lat: 62.05, lng: 129.71, radiusMeters: 2200 },
+  { lat: 62.01, lng: 129.69, radiusMeters: 2200 },
+  { lat: 62.015, lng: 129.765, radiusMeters: 2000 },
+  { lat: 61.995, lng: 129.735, radiusMeters: 1800 },
+];
+
 export const ALLOWED_PLACE_TYPES = new Set([
   "locality",
   "political",
