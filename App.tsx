@@ -1,384 +1,74 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import StreetView from "./components/StreetView.tsx";
+import React, { useEffect, useState } from "react";
 import MiniMap from "./components/MiniMap.tsx";
-import logo from "./logo.svg";
-import {
-  fetchLeaderboard,
-  submitGameResult,
-  type LeaderboardEntry,
-} from "./lib/backendApi.ts";
-import { getErrorMessage } from "./lib/errors.ts";
+import StreetView from "./components/StreetView.tsx";
+import { useGameSession } from "./hooks/useGameSession.ts";
+import { useLeaderboard } from "./hooks/useLeaderboard.ts";
+import { useYandexMaps } from "./hooks/useYandexMaps.ts";
 import { APP_TITLE, TOTAL_ROUNDS } from "./lib/gameConstants.ts";
-import type { GameMode, GameState, GeneratedRound, Language, LatLng } from "./lib/gameTypes.ts";
+import type { Language } from "./lib/gameTypes.ts";
 import { LEADERBOARD_TEXT, UI_TEXT } from "./lib/uiText.ts";
-import {
-  generateCandidateLocation as sharedGenerateCandidateLocation,
-  getBoundsForMode,
-  haversineKm as calculateHaversineKm,
-  isAllowedPopulatedPlace,
-  isWithinBounds as isLocationWithinBounds,
-  scoreFromDistance as calculateScoreFromDistance,
-} from "./lib/mapUtils.ts";
-import {
-  loadYandexMaps as loadYandexMapsApi,
-  PlacesService as SharedPlacesService,
-  StreetViewService as SharedStreetViewService,
-} from "./lib/yandexMaps.ts";
-
-type RoundSummary = {
-  roundNumber: number;
-  score: number;
-  distanceKm: number;
-};
+import logo from "./logo.svg";
 
 const App = () => {
-  const [ymapsApi, setYmapsApi] = useState<any>(null);
   const [language, setLanguage] = useState<Language>("ru");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [gameMode, setGameMode] = useState<GameMode | null>(null);
-  const [gameState, setGameState] = useState<GameState>("MODE_SELECT");
-  const [targetLocation, setTargetLocation] = useState<LatLng | null>(null);
-  const [targetPanorama, setTargetPanorama] = useState<any>(null);
-  const [guessLocation, setGuessLocation] = useState<LatLng | null>(null);
-  const [distance, setDistance] = useState<number | null>(null);
-  const [score, setScore] = useState<number>(0);
-  const [totalXP, setTotalXP] = useState<number>(0);
-  const [currentRound, setCurrentRound] = useState<number>(1);
-  const [roundHistory, setRoundHistory] = useState<RoundSummary[]>([]);
-  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState<string>(UI_TEXT.ru.loadingMap);
-  const [error, setError] = useState<string | null>(null);
-  const generationLock = useRef(false);
-  const [playerName, setPlayerName] = useState("");
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
-  const [saveResultFeedback, setSaveResultFeedback] = useState<string | null>(null);
-  const [isSubmittingResult, setIsSubmittingResult] = useState(false);
-  const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
-  const [savedGameId, setSavedGameId] = useState<string | null>(null);
 
   const t = UI_TEXT[language];
   const leaderboardText = LEADERBOARD_TEXT[language];
-  const isFinalRound = currentRound >= TOTAL_ROUNDS;
-  const averageScore = roundHistory.length
-    ? Math.round(roundHistory.reduce((sum, round) => sum + round.score, 0) / roundHistory.length)
-    : 0;
-  const totalDistance = roundHistory.reduce((sum, round) => sum + round.distanceKm, 0);
-  const bestRound = roundHistory.reduce<RoundSummary | null>(
-    (best, round) => (!best || round.score > best.score ? round : best),
-    null
-  );
+
+  const { ymapsApi, streetViewService, placesService, isMapReady, error, setError } = useYandexMaps(t.error);
+  const {
+    gameMode,
+    gameState,
+    targetLocation,
+    targetPanorama,
+    guessLocation,
+    distance,
+    score,
+    totalXP,
+    currentRound,
+    roundHistory,
+    shareFeedback,
+    loadingMessage,
+    isFinalRound,
+    averageScore,
+    totalDistance,
+    bestRound,
+    setGuessLocation,
+    startGame,
+    confirmGuess,
+    goToNextRound,
+    showFinalResults,
+    resetSession,
+    shareResults,
+    syncLoadingMessage,
+  } = useGameSession({
+    uiText: t,
+    streetViewService,
+    placesService,
+    setExternalError: setError,
+  });
+  const {
+    playerName,
+    leaderboard,
+    leaderboardError,
+    saveResultFeedback,
+    isSubmittingResult,
+    isLoadingLeaderboard,
+    savedGameId,
+    setPlayerName,
+    resetLeaderboardState,
+    loadLeaderboard,
+    saveResult,
+  } = useLeaderboard({
+    gameMode,
+    roundHistory,
+    uiText: leaderboardText,
+  });
 
   useEffect(() => {
-    let mounted = true;
-
-    loadYandexMapsApi()
-      .then((api) => {
-        if (mounted) {
-          setYmapsApi(api);
-        }
-      })
-      .catch((err) => {
-        if (mounted) {
-          setError(getErrorMessage(err, t.error));
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [t.error]);
-
-  const streetViewService = useMemo(() => (ymapsApi ? new SharedStreetViewService(ymapsApi) : null), [ymapsApi]);
-  const placesService = useMemo(() => (ymapsApi ? new SharedPlacesService(ymapsApi) : null), [ymapsApi]);
-  const isMapReady = Boolean(ymapsApi && streetViewService && placesService);
-
-  const generateValidLocation = useCallback(
-    async (mode: GameMode, attempt = 0): Promise<GeneratedRound> => {
-      if (!streetViewService || !placesService) {
-        throw new Error("Сервисы карты недоступны");
-      }
-
-      if (attempt > 160) {
-        throw new Error("Не удалось найти подходящую локацию");
-      }
-
-      const bounds = getBoundsForMode(mode);
-
-      try {
-        const candidate = sharedGenerateCandidateLocation(mode, bounds);
-        const panorama = await streetViewService.getPanorama({
-          location: candidate,
-          radius: mode === "SAKHA" ? 25000 : 3500,
-          source: "OUTDOOR",
-        });
-
-        if (panorama.status === "ZERO_RESULTS" || !panorama.location) {
-          return generateValidLocation(mode, attempt + 1);
-        }
-
-        if (!isLocationWithinBounds(panorama.location, bounds)) {
-          return generateValidLocation(mode, attempt + 1);
-        }
-
-        if (mode === "YAKUTSK") {
-          return {
-            location: panorama.location,
-            panorama: panorama.panorama,
-          };
-        }
-
-        const nearby = await placesService.nearbySearch({
-          location: panorama.location,
-          radius: 1200,
-        });
-
-        if (nearby.status !== "OK") {
-          return generateValidLocation(mode, attempt + 1);
-        }
-
-        const isPopulated = nearby.results.some((result) => isAllowedPopulatedPlace(result.types));
-
-        if (!isPopulated) {
-          return generateValidLocation(mode, attempt + 1);
-        }
-
-        return {
-          location: panorama.location,
-          panorama: panorama.panorama,
-        };
-      } catch (error) {
-        const message = getErrorMessage(error, "");
-        const isConfigurationError =
-          /api[- ]?key|failed to load|unauthorized|forbidden|access denied/i.test(message);
-
-        if (isConfigurationError) {
-          throw new Error(message);
-        }
-
-        console.warn("Round generation attempt failed, retrying with a new location.", error);
-        return generateValidLocation(mode, attempt + 1);
-      }
-    },
-    [placesService, streetViewService]
-  );
-
-  const startNewRound = useCallback(
-    async (mode: GameMode) => {
-      if (generationLock.current) {
-        return;
-      }
-
-      generationLock.current = true;
-      setError(null);
-      setLoadingMessage(t.loadingRound);
-      setGameState("LOADING_RESULT");
-      setShareFeedback(null);
-      setGuessLocation(null);
-      setTargetLocation(null);
-      setTargetPanorama(null);
-      setDistance(null);
-      setScore(0);
-
-      try {
-        const roundData = await generateValidLocation(mode);
-        setTargetLocation(roundData.location);
-        setTargetPanorama(roundData.panorama);
-        setGameState("GUESSING");
-      } catch (err) {
-        setError(getErrorMessage(err, t.error));
-      } finally {
-        generationLock.current = false;
-      }
-    },
-    [generateValidLocation, t.error, t.loadingRound]
-  );
-
-  const handleModeSelect = useCallback(
-    (mode: GameMode) => {
-      if (!ymapsApi || !streetViewService || !placesService) {
-        return;
-      }
-      setCurrentRound(1);
-      setRoundHistory([]);
-      setTotalXP(0);
-      setDistance(null);
-      setScore(0);
-      setShareFeedback(null);
-      setGameMode(mode);
-      startNewRound(mode);
-      setPlayerName("");
-      setLeaderboard([]);
-      setLeaderboardError(null);
-      setSaveResultFeedback(null);
-      setIsSubmittingResult(false);
-      setIsLoadingLeaderboard(false);
-      setSavedGameId(null);
-    },
-    [placesService, startNewRound, streetViewService, ymapsApi]
-  );
-
-  const handleConfirmGuess = useCallback(async () => {
-    if (!guessLocation || !targetLocation || !gameMode) {
-      return;
-    }
-
-    setGameState("LOADING_RESULT");
-    setLoadingMessage(t.checkingResult);
-
-    const distanceKm = calculateHaversineKm(targetLocation, guessLocation);
-    const roundScore = calculateScoreFromDistance(distanceKm, gameMode);
-    const nextRoundSummary = {
-      roundNumber: currentRound,
-      score: roundScore,
-      distanceKm,
-    };
-
-    setDistance(distanceKm);
-    setScore(roundScore);
-    setTotalXP((prev) => prev + roundScore);
-    setRoundHistory((prev) => [...prev, nextRoundSummary]);
-    setGameState("RESULT");
-  }, [currentRound, gameMode, guessLocation, t.checkingResult, targetLocation]);
-
-  const handleNextRound = useCallback(() => {
-    if (!gameMode) {
-      return;
-    }
-    setCurrentRound((prev) => prev + 1);
-    startNewRound(gameMode);
-  }, [gameMode, startNewRound]);
-
-  const handleShowFinalResults = useCallback(() => {
-    setGameState("FINAL_RESULT");
-  }, []);
-
-  const handlePlayAgain = useCallback(() => {
-    setGameMode(null);
-    setGameState("MODE_SELECT");
-    setCurrentRound(1);
-    setRoundHistory([]);
-    setTotalXP(0);
-    setGuessLocation(null);
-    setTargetLocation(null);
-    setTargetPanorama(null);
-    setDistance(null);
-    setScore(0);
-    setShareFeedback(null);
-    setPlayerName("");
-    setLeaderboard([]);
-    setLeaderboardError(null);
-    setSaveResultFeedback(null);
-    setIsSubmittingResult(false);
-    setIsLoadingLeaderboard(false);
-    setSavedGameId(null);
-  }, []);
-
-  const loadLeaderboard = useCallback(async () => {
-    if (!gameMode) {
-      return;
-    }
-
-    try {
-      setIsLoadingLeaderboard(true);
-      setLeaderboardError(null);
-      const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
-      setLeaderboard(data.items);
-    } catch (loadError) {
-      setLeaderboardError(getErrorMessage(loadError, leaderboardText.leaderboardLoadError));
-    } finally {
-      setIsLoadingLeaderboard(false);
-    }
-  }, [gameMode, leaderboardText.leaderboardLoadError]);
-
-  const handleSaveResult = useCallback(async () => {
-    if (!gameMode || roundHistory.length === 0 || savedGameId) {
-      return;
-    }
-
-    const trimmedName = playerName.trim();
-    if (trimmedName.length < 2) {
-      setSaveResultFeedback(leaderboardText.nameTooShort);
-      return;
-    }
-
-    try {
-      setIsSubmittingResult(true);
-      setSaveResultFeedback(null);
-      setLeaderboardError(null);
-
-      const savedGame = await submitGameResult({
-        playerName: trimmedName,
-        mode: gameMode,
-        rounds: roundHistory.map((round) => ({
-          roundNumber: round.roundNumber,
-          score: round.score,
-          distanceKm: round.distanceKm,
-        })),
-      });
-
-      setSavedGameId(savedGame.id);
-      setSaveResultFeedback(leaderboardText.saveResultSuccess);
-
-      setIsLoadingLeaderboard(true);
-      const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
-      setLeaderboard(data.items);
-    } catch (saveError) {
-      setLeaderboardError(getErrorMessage(saveError, leaderboardText.saveResultError));
-    } finally {
-      setIsSubmittingResult(false);
-      setIsLoadingLeaderboard(false);
-    }
-  }, [
-    gameMode,
-    leaderboardText.nameTooShort,
-    leaderboardText.saveResultError,
-    leaderboardText.saveResultSuccess,
-    playerName,
-    roundHistory,
-    savedGameId,
-  ]);
-
-  const handleShareResults = useCallback(async () => {
-    if (!gameMode || roundHistory.length === 0) {
-      return;
-    }
-
-    const shareText = [
-      APP_TITLE,
-      `${t.finalResults}: ${totalXP} XP`,
-      `${t.roundsComplete}: ${roundHistory.length}/${TOTAL_ROUNDS}`,
-      `${t.averageScore}: ${averageScore}`,
-      `${t.totalDistance}: ${totalDistance.toFixed(2)} km`,
-      bestRound ? `${t.bestRound}: #${bestRound.roundNumber} (${bestRound.score})` : "",
-      `Mode: ${gameMode}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    try {
-      if (navigator.share) {
-        await navigator.share({ text: shareText });
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareText);
-      } else {
-        throw new Error("Share unavailable");
-      }
-
-      setShareFeedback(t.shareSuccess);
-    } catch (shareError) {
-      if (shareError instanceof Error && shareError.name === "AbortError") {
-        return;
-      }
-
-      try {
-        await navigator.clipboard.writeText(shareText);
-        setShareFeedback(t.shareSuccess);
-      } catch {
-        setShareFeedback("Share unavailable");
-      }
-    }
-  }, [averageScore, bestRound, gameMode, roundHistory.length, t, totalDistance, totalXP]);
+    syncLoadingMessage();
+  }, [syncLoadingMessage]);
 
   useEffect(() => {
     if (gameState === "FINAL_RESULT" && gameMode) {
@@ -390,24 +80,33 @@ const App = () => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.code === "Space" && gameState === "RESULT") {
         event.preventDefault();
+
         if (isFinalRound) {
-          handleShowFinalResults();
+          showFinalResults();
           return;
         }
 
-        handleNextRound();
+        goToNextRound();
       }
     };
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [gameState, handleNextRound, handleShowFinalResults, isFinalRound]);
+  }, [gameState, goToNextRound, isFinalRound, showFinalResults]);
 
-  useEffect(() => {
-    if (gameState === "LOADING_RESULT" && !targetLocation) {
-      setLoadingMessage(t.loadingRound);
+  const handleModeSelect = (mode: "YAKUTSK" | "SAKHA") => {
+    if (!isMapReady) {
+      return;
     }
-  }, [gameState, t.loadingRound, targetLocation]);
+
+    resetLeaderboardState();
+    startGame(mode);
+  };
+
+  const handlePlayAgain = () => {
+    resetSession();
+    resetLeaderboardState();
+  };
 
   if (error) {
     return (
@@ -574,7 +273,7 @@ const App = () => {
                 maxLength={24}
               />
               <button
-                onClick={handleSaveResult}
+                onClick={saveResult}
                 disabled={isSubmittingResult || Boolean(savedGameId)}
                 className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow transition disabled:cursor-not-allowed disabled:opacity-70"
               >
@@ -620,7 +319,7 @@ const App = () => {
               <div className="text-sm text-white/70">{shareFeedback ?? ""}</div>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={handleShareResults}
+                  onClick={shareResults}
                   className="rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
                 >
                   {t.shareResult}
@@ -663,7 +362,7 @@ const App = () => {
                 <div className="text-2xl font-semibold">{score}</div>
               </div>
               <button
-                onClick={isFinalRound ? handleShowFinalResults : handleNextRound}
+                onClick={isFinalRound ? showFinalResults : goToNextRound}
                 className="rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
               >
                 {isFinalRound ? t.finalResults : t.nextRound}
@@ -678,7 +377,7 @@ const App = () => {
             guessLocation={guessLocation}
             gameState={gameState}
             onGuess={setGuessLocation}
-            onConfirm={handleConfirmGuess}
+            onConfirm={confirmGuess}
             confirmDisabled={!guessLocation || gameState !== "GUESSING"}
             confirmLabel={t.confirm}
           />
