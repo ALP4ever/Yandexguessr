@@ -9,7 +9,7 @@ type StreetViewProps = {
 };
 
 const PANORAMA_UNAVAILABLE_MESSAGE =
-  "<div style='display:flex;align-items:center;justify-content:center;height:100%;color:#e2e8f0;font-weight:600;'>ÐŸÐ°Ð½Ð¾Ñ€Ð°Ð¼Ð° Ð½ÐµÐ´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð°</div>";
+  "<div style='display:flex;align-items:center;justify-content:center;height:100%;color:#e2e8f0;font-weight:600;'>Панорама недоступна</div>";
 
 const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -66,8 +66,7 @@ const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewPro
         }
       } catch {
         if (!cancelled) {
-          container.innerHTML =
-            "<div style='display:flex;align-items:center;justify-content:center;height:100%;color:#e2e8f0;font-weight:600;'>Панорама недоступна</div>";
+          container.innerHTML = PANORAMA_UNAVAILABLE_MESSAGE;
         }
       }
     };
