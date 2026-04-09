@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { APP_TITLE, TOTAL_ROUNDS } from "../lib/gameConstants.ts";
+import { APP_TITLE } from "../lib/appConfig.ts";
+import { TOTAL_ROUNDS } from "../lib/gameConstants.ts";
 import { getErrorMessage } from "../lib/errors.ts";
 import type { GameMode, GameState, GeneratedRound, LatLng } from "../lib/gameTypes.ts";
 import {
@@ -11,6 +12,7 @@ import {
   scoreFromDistance,
 } from "../lib/mapUtils.ts";
 import type { MainUiText } from "../lib/uiText.ts";
+import type { PlacesService, StreetViewService, YandexPanorama } from "../lib/yandexMaps.ts";
 
 export type RoundSummary = {
   roundNumber: number;
@@ -30,8 +32,8 @@ type ShareOptions = {
 
 type UseGameSessionOptions = {
   uiText: MainUiText;
-  streetViewService: any;
-  placesService: any;
+  streetViewService: StreetViewService | null;
+  placesService: PlacesService | null;
   setExternalError: (value: string | null) => void;
 };
 
@@ -61,7 +63,7 @@ export const useGameSession = ({ uiText, streetViewService, placesService, setEx
   const [gameMode, setGameMode] = useState<GameMode | null>(null);
   const [gameState, setGameState] = useState<GameState>("MODE_SELECT");
   const [targetLocation, setTargetLocation] = useState<LatLng | null>(null);
-  const [targetPanorama, setTargetPanorama] = useState<any>(null);
+  const [targetPanorama, setTargetPanorama] = useState<YandexPanorama | null>(null);
   const [guessLocation, setGuessLocation] = useState<LatLng | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [score, setScore] = useState<number>(0);

@@ -1,16 +1,30 @@
 import type { LatLng, PlaceResult } from "./gameTypes.ts";
 import { getPlaceTypesFromYandexKind, metersToDelta } from "./mapUtils.ts";
+import type { YandexGeoObject, YandexGeocoderMetaData, YandexMapsApi } from "./yandexMapsTypes.ts";
+
+export type {
+  YandexEvent,
+  YandexGeoObjectCollectionMap,
+  YandexGeocodeResponse,
+  YandexGeocoderMetaData,
+  YandexMapInstance,
+  YandexMapsApi,
+  YandexPanorama,
+  YandexPanoramaPlayer,
+  YandexPlacemark,
+  YandexPolyline,
+} from "./yandexMapsTypes.ts";
 
 declare global {
   interface Window {
-    ymaps?: any;
+    ymaps?: YandexMapsApi;
   }
 }
 
 const YANDEX_MAPS_URL = "https://api-maps.yandex.ru/2.1/?lang=ru_RU";
 
 export class StreetViewService {
-  constructor(private readonly ymaps: any) {}
+  constructor(private readonly ymaps: YandexMapsApi) {}
 
   async getPanorama(request: { location: LatLng; radius: number; source: "OUTDOOR" }) {
     const panoramas = await this.ymaps.panorama.locate([request.location.lat, request.location.lng], {
@@ -22,12 +36,13 @@ export class StreetViewService {
       return { status: "ZERO_RESULTS" as const };
     }
 
-    const pano = panoramas[0];
-    const position = pano.getPosition();
+    const panorama = panoramas[0];
+    const position = panorama.getPosition();
+
     return {
       status: "OK" as const,
       location: { lat: position[0], lng: position[1] },
-      panorama: pano,
+      panorama,
     };
   }
 }
@@ -35,7 +50,7 @@ export class StreetViewService {
 export class PlacesService {
   private readonly nearbyCache = new Map<string, { results: PlaceResult[]; status: "OK" | "ZERO_RESULTS" }>();
 
-  constructor(private readonly ymaps: any) {}
+  constructor(private readonly ymaps: YandexMapsApi) {}
 
   async nearbySearch(request: { location: LatLng; radius: number }) {
     const cacheKey = [
@@ -50,22 +65,22 @@ export class PlacesService {
     }
 
     const { deltaLat, deltaLng } = metersToDelta(request.radius, request.location.lat);
-    const bbox = [
+    const bbox: [[number, number], [number, number]] = [
       [request.location.lat - deltaLat, request.location.lng - deltaLng],
       [request.location.lat + deltaLat, request.location.lng + deltaLng],
     ];
 
-    const geoObjects = await this.ymaps.geocode([request.location.lat, request.location.lng], {
+    const geocodeResponse = await this.ymaps.geocode([request.location.lat, request.location.lng], {
       results: 10,
       bbox,
       rspn: 1,
     });
 
     const results: PlaceResult[] = [];
-    geoObjects.geoObjects.each((geoObject: any) => {
-      const meta = geoObject.properties.get("metaDataProperty.GeocoderMetaData");
-      const kind = meta?.kind as string | undefined;
-      const name = meta?.text || geoObject.properties.get("name");
+    geocodeResponse.geoObjects.each((geoObject: YandexGeoObject) => {
+      const meta = geoObject.properties.get("metaDataProperty.GeocoderMetaData") as YandexGeocoderMetaData | undefined;
+      const kind = meta?.kind;
+      const name = meta?.text || (geoObject.properties.get("name") as string | undefined) || "";
       const types = getPlaceTypesFromYandexKind(kind);
       results.push({ name, types });
     });
@@ -137,18 +152,18 @@ const getYandexMapsApiKey = async () => {
 
 export const loadYandexMaps = async () => {
   if (window.ymaps) {
-    return new Promise<any>((resolve) => {
-      window.ymaps?.ready(() => resolve(window.ymaps));
+    return new Promise<YandexMapsApi>((resolve) => {
+      window.ymaps?.ready(() => resolve(window.ymaps as YandexMapsApi));
     });
   }
 
   const apiKey = await getYandexMapsApiKey();
   const scriptSrc = `${YANDEX_MAPS_URL}&apikey=${encodeURIComponent(apiKey)}`;
 
-  return new Promise<any>((resolve, reject) => {
+  return new Promise<YandexMapsApi>((resolve, reject) => {
     const existing = document.querySelector(`script[src="${scriptSrc}"]`) as HTMLScriptElement | null;
     if (existing) {
-      existing.addEventListener("load", () => window.ymaps?.ready(() => resolve(window.ymaps)));
+      existing.addEventListener("load", () => window.ymaps?.ready(() => resolve(window.ymaps as YandexMapsApi)));
       existing.addEventListener("error", () => reject(new Error("Yandex Maps failed to load")));
       return;
     }
@@ -156,25 +171,25 @@ export const loadYandexMaps = async () => {
     const script = document.createElement("script");
     script.src = scriptSrc;
     script.async = true;
-    script.onload = () => window.ymaps?.ready(() => resolve(window.ymaps));
+    script.onload = () => window.ymaps?.ready(() => resolve(window.ymaps as YandexMapsApi));
     script.onerror = () => reject(new Error("Yandex Maps failed to load"));
     document.head.appendChild(script);
   });
 };
 
-export const extractAdminLevel1 = (geocodeResult: any) => {
-  const meta = geocodeResult?.properties?.get("metaDataProperty.GeocoderMetaData");
+export const extractAdminLevel1 = (geocodeResult: YandexGeoObject | null | undefined) => {
+  const meta = geocodeResult?.properties?.get("metaDataProperty.GeocoderMetaData") as YandexGeocoderMetaData | undefined;
   const components = meta?.Address?.Components || [];
 
   for (const component of components) {
     if (component.kind === "province") {
-      return component.name as string;
+      return component.name ?? null;
     }
   }
 
   for (const component of components) {
     if (component.kind === "area") {
-      return component.name as string;
+      return component.name ?? null;
     }
   }
 

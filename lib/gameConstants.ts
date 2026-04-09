@@ -1,7 +1,6 @@
 import type { Bounds, GameMode, SeedLocation } from "./gameTypes.ts";
 
 export const TOTAL_ROUNDS = 5;
-export const APP_TITLE = "Sakhaguessr";
 
 export const BOUNDS_BY_MODE: Record<GameMode, Bounds> = {
   YAKUTSK: {

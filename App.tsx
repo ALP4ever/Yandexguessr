@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import AppHeader from "./components/AppHeader.tsx";
-import FinalResultsOverlay from "./components/FinalResultsOverlay.tsx";
-import MiniMap from "./components/MiniMap.tsx";
-import ModeSelectOverlay from "./components/ModeSelectOverlay.tsx";
-import ResultPanel from "./components/ResultPanel.tsx";
-import SettingsPanel from "./components/SettingsPanel.tsx";
-import StreetView from "./components/StreetView.tsx";
+import {
+  AppHeader,
+  FinalResultsOverlay,
+  MiniMap,
+  ModeSelectOverlay,
+  ResultPanel,
+  SettingsPanel,
+  StreetView,
+} from "./components/index.ts";
 import { useGameSession } from "./hooks/useGameSession.ts";
 import { useLeaderboard } from "./hooks/useLeaderboard.ts";
 import { useYandexMaps } from "./hooks/useYandexMaps.ts";

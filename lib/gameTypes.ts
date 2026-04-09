@@ -1,3 +1,5 @@
+import type { YandexPanorama } from "./yandexMapsTypes.ts";
+
 export type GameMode = "YAKUTSK" | "SAKHA";
 export type GameState = "MODE_SELECT" | "GUESSING" | "LOADING_RESULT" | "RESULT" | "FINAL_RESULT";
 export type Language = "ru" | "sah";
@@ -27,7 +29,7 @@ export type SeedLocation = {
 
 export type GeneratedRound = {
   location: LatLng;
-  panorama: any;
+  panorama: YandexPanorama;
 };
 
 export type PrefetchedRound = {

@@ -1,7 +1,8 @@
-import { APP_TITLE, TOTAL_ROUNDS } from "../lib/gameConstants.ts";
-import type { GameMode, GameState } from "../lib/gameTypes.ts";
-import type { MainUiText } from "../lib/uiText.ts";
-import logo from "../logo.svg";
+import { APP_TITLE } from "../../lib/appConfig.ts";
+import { TOTAL_ROUNDS } from "../../lib/gameConstants.ts";
+import type { GameMode, GameState } from "../../lib/gameTypes.ts";
+import type { MainUiText } from "../../lib/uiText.ts";
+import logo from "../../logo.svg";
 
 type AppHeaderProps = {
   uiText: MainUiText;

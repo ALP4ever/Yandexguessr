@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../lib/errors.ts";
-import { loadYandexMaps, PlacesService, StreetViewService } from "../lib/yandexMaps.ts";
+import { loadYandexMaps, PlacesService, StreetViewService, type YandexMapsApi } from "../lib/yandexMaps.ts";
 
 export const useYandexMaps = (fallbackErrorMessage: string) => {
-  const [ymapsApi, setYmapsApi] = useState<any>(null);
+  const [ymapsApi, setYmapsApi] = useState<YandexMapsApi | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

@@ -1,5 +1,6 @@
-import type { Language } from "../lib/gameTypes.ts";
-import type { MainUiText } from "../lib/uiText.ts";
+import { CONTACT_TELEGRAM_URL } from "../../lib/appConfig.ts";
+import type { Language } from "../../lib/gameTypes.ts";
+import type { MainUiText } from "../../lib/uiText.ts";
 
 type SettingsPanelProps = {
   uiText: MainUiText;
@@ -41,7 +42,7 @@ const SettingsPanel = ({
             </button>
           </div>
           <a
-            href="https://t.me/Alpinisti4"
+            href={CONTACT_TELEGRAM_URL}
             target="_blank"
             rel="noreferrer"
             className="mt-4 inline-flex items-center justify-center rounded-xl bg-white/90 px-7 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.04]"

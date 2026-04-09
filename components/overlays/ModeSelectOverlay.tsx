@@ -1,4 +1,4 @@
-import type { MainUiText } from "../lib/uiText.ts";
+import type { MainUiText } from "../../lib/uiText.ts";
 
 type ModeSelectOverlayProps = {
   uiText: MainUiText;

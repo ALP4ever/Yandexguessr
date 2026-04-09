@@ -1,9 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BOUNDS_BY_MODE } from "../lib/gameConstants.ts";
-import type { GameMode, GameState, LatLng } from "../lib/gameTypes.ts";
+import { BOUNDS_BY_MODE } from "../../lib/gameConstants.ts";
+import type { GameMode, GameState, LatLng } from "../../lib/gameTypes.ts";
+import type {
+  YandexEvent,
+  YandexGeoObjectCollectionMap,
+  YandexMapInstance,
+  YandexMapsApi,
+  YandexPlacemark,
+  YandexPolyline,
+} from "../../lib/yandexMaps.ts";
 
 type MiniMapProps = {
-  ymaps: any;
+  ymaps: YandexMapsApi;
   mode: GameMode;
   targetLocation: LatLng | null;
   guessLocation: LatLng | null;
@@ -27,11 +35,11 @@ const MiniMap = ({
 }: MiniMapProps) => {
   const collapsedSize = { width: 320, height: 220 };
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const guessPlacemarkRef = useRef<any>(null);
-  const targetPlacemarkRef = useRef<any>(null);
-  const polylineRef = useRef<any>(null);
-  const clickHandlerRef = useRef<any>(null);
+  const mapInstanceRef = useRef<YandexMapInstance | null>(null);
+  const guessPlacemarkRef = useRef<YandexPlacemark | null>(null);
+  const targetPlacemarkRef = useRef<YandexPlacemark | null>(null);
+  const polylineRef = useRef<YandexPolyline | null>(null);
+  const clickHandlerRef = useRef<((event: YandexEvent) => void) | null>(null);
   const [hovered, setHovered] = useState(false);
   const [viewportSize, setViewportSize] = useState(() => ({
     width: window.innerWidth,
@@ -54,7 +62,7 @@ const MiniMap = ({
   );
   const mapSize = expanded ? expandedSize : collapsedSize;
 
-  const removeGeoObject = (map: any, ref: React.MutableRefObject<any>) => {
+  const removeGeoObject = (map: YandexGeoObjectCollectionMap, ref: React.MutableRefObject<YandexPlacemark | YandexPolyline | null>) => {
     if (!ref.current) {
       return;
     }
@@ -63,7 +71,7 @@ const MiniMap = ({
     ref.current = null;
   };
 
-  const removeClickHandler = (map: any) => {
+  const removeClickHandler = (map: YandexMapInstance) => {
     if (!clickHandlerRef.current) {
       return;
     }
@@ -133,7 +141,7 @@ const MiniMap = ({
     removeClickHandler(map);
 
     if (gameState === "GUESSING") {
-      const handler = (event: any) => {
+      const handler = (event: YandexEvent) => {
         const coords = event.get("coords");
         onGuess({ lat: coords[0], lng: coords[1] });
       };

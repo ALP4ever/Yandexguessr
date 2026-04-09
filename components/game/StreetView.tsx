@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from "react";
-import type { LatLng } from "../lib/gameTypes.ts";
+import type { LatLng } from "../../lib/gameTypes.ts";
+import type { YandexPanorama, YandexMapsApi, YandexPanoramaPlayer } from "../../lib/yandexMaps.ts";
 
 type StreetViewProps = {
-  ymaps: any;
+  ymaps: YandexMapsApi;
   location: LatLng;
-  panorama?: any;
+  panorama?: YandexPanorama | null;
   hidden?: boolean;
 };
 
@@ -13,7 +14,7 @@ const PANORAMA_UNAVAILABLE_MESSAGE =
 
 const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YandexPanoramaPlayer | null>(null);
   const wrapperClassName = hidden
     ? "pointer-events-none absolute -left-[9999px] top-0 h-[360px] w-[640px] opacity-0"
     : "relative h-full w-full";

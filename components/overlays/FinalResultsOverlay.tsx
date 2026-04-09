@@ -1,7 +1,7 @@
-import type { LeaderboardEntry } from "../lib/backendApi.ts";
-import { TOTAL_ROUNDS } from "../lib/gameConstants.ts";
-import type { LeaderboardUiText, MainUiText } from "../lib/uiText.ts";
-import type { RoundSummary } from "../hooks/useGameSession.ts";
+import type { LeaderboardEntry } from "../../lib/backendApi.ts";
+import { TOTAL_ROUNDS } from "../../lib/gameConstants.ts";
+import type { LeaderboardUiText, MainUiText } from "../../lib/uiText.ts";
+import type { RoundSummary } from "../../hooks/useGameSession.ts";
 
 type FinalResultsOverlayProps = {
   uiText: MainUiText;
