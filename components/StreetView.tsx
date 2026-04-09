@@ -1,9 +1,5 @@
 import React, { useEffect, useRef } from "react";
-
-type LatLng = {
-  lat: number;
-  lng: number;
-};
+import type { LatLng } from "../lib/gameTypes.ts";
 
 type StreetViewProps = {
   ymaps: any;

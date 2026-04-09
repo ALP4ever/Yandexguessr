@@ -3,11 +3,8 @@ import {
   BOUNDS_BY_MODE,
   SAKHA_LOCATION_SEEDS,
   YAKUTSK_LOCATION_SEEDS,
-  type Bounds,
-  type GameMode,
-  type LatLng,
-  type SeedLocation,
-} from "./gameConfig.ts";
+} from "./gameConstants.ts";
+import type { Bounds, GameMode, LatLng, SeedLocation } from "./gameTypes.ts";
 
 const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 

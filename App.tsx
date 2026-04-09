@@ -7,14 +7,10 @@ import {
   submitGameResult,
   type LeaderboardEntry,
 } from "./lib/backendApi.ts";
-
-import {
-  type GameMode,
-  type GameState,
-  type GeneratedRound,
-  type Language,
-  type LatLng,
-} from "./lib/gameConfig.ts";
+import { getErrorMessage } from "./lib/errors.ts";
+import { APP_TITLE, TOTAL_ROUNDS } from "./lib/gameConstants.ts";
+import type { GameMode, GameState, GeneratedRound, Language, LatLng } from "./lib/gameTypes.ts";
+import { LEADERBOARD_TEXT, UI_TEXT } from "./lib/uiText.ts";
 import {
   generateCandidateLocation as sharedGenerateCandidateLocation,
   getBoundsForMode,
@@ -29,455 +25,10 @@ import {
   StreetViewService as SharedStreetViewService,
 } from "./lib/yandexMaps.ts";
 
-const UI_TEXT: Record<
-  Language,
-  {
-    title: string;
-    xp: string;
-    streak: string;
-    round: string;
-    roundsShort: string;
-    chooseMode: string;
-    chooseModeDescription: string;
-    yakutskOnly: string;
-    allSakha: string;
-    loadingMap: string;
-    loadingRound: string;
-    checkingResult: string;
-    settings: string;
-    language: string;
-    russian: string;
-    yakut: string;
-    contact: string;
-    correctRegion: string;
-    wrongRegion: string;
-    region: string;
-    distance: string;
-    score: string;
-    nextRound: string;
-    finishGame: string;
-    confirm: string;
-    finalResults: string;
-    roundsComplete: string;
-    averageScore: string;
-    totalDistance: string;
-    bestRound: string;
-    shareResult: string;
-    shareSuccess: string;
-    playAgain: string;
-    error: string;
-  }
-> = {
-  ru: {
-    title: "FREEGUESSR - ЯКУТИЯ",
-    xp: "XP",
-    streak: "Стрик",
-    round: "Раунд",
-    roundsShort: "из",
-    chooseMode: "Выберите режим",
-    chooseModeDescription: "Игровые локации подбираются внутри населенных пунктов и в пределах выбранной территории.",
-    yakutskOnly: "Только Якутск",
-    allSakha: "Вся Республика Саха (Якутия)",
-    loadingMap: "Загрузка Яндекс Карт...",
-    loadingRound: "Загрузка...",
-    checkingResult: "Проверка результата...",
-    settings: "Настройки",
-    language: "Язык",
-    russian: "Русский",
-    yakut: "Якутский",
-    contact: "Связаться с нами",
-    correctRegion: "ВЕРНЫЙ РЕГИОН",
-    wrongRegion: "НЕВЕРНЫЙ РЕГИОН",
-    region: "Регион",
-    distance: "Дистанция",
-    score: "Очки",
-    nextRound: "Следующий раунд (Space)",
-    finishGame: "Показать финальную статистику",
-    confirm: "ПОДТВЕРДИТЬ ОТВЕТ",
-    finalResults: "Финальные результаты",
-    roundsComplete: "Раунд завершён",
-    averageScore: "Средний результат",
-    totalDistance: "Общая дистанця",
-    bestRound: "Лучший раунд",
-    shareResult: "Поделиться результатом",
-    shareSuccess: "Копировать результат",
-    playAgain: "Сыграть снова",
-    error: "Ошибка",
-  },
-  sah: {
-    title: "FREEGUESSR - САХА",
-    xp: "XP",
-    streak: "Стрик",
-    round: "Раунд",
-    roundsShort: "",
-    chooseMode: "Режим тал",
-    chooseModeDescription: "Оонньуу сирдэрэ нэһилиэктэр иһигэр уонна талыллыбыт сир арыллыытыгар булуллар.",
-    yakutskOnly: "Якутскай эрэ",
-    allSakha: "Бүтүн Саха Өрөспүүбүлүкэтэ",
-    loadingMap: "Яндекс Карталар хачайдана турар...",
-    loadingRound: "Хачайдана турар...",
-    checkingResult: "Түмүк бэрэбиэркэтэ...",
-    settings: "Туруоруу",
-    language: "Тыл",
-    russian: "Нуучча",
-    yakut: "Саха",
-    contact: "Биһиэхэ суруй",
-    correctRegion: "СӨП РЕГИОН",
-    wrongRegion: "САТААБАТ РЕГИОН",
-    region: "Регион",
-    distance: "Ыраахтааһын",
-    score: "Баал",
-    nextRound: "Аныгы раунд (Space)",
-    finishGame: "Түмүк",
-    confirm: "ЭППИЭТИН БИГЭЛЭЭ",
-    finalResults: "Түмүк",
-    roundsComplete: "Хас раунд бүттэ",
-    averageScore: "Орто баал",
-    totalDistance: "Уопсай дистанция",
-    bestRound: "Саамай үчүгэй раунд",
-    shareResult: "Түмүгү үллэстии",
-    shareSuccess: "Куоппуйаламмыт",
-    playAgain: "Өссө төгүл оонньоо",
-    error: "Алҕас",
-  },
-};
-
-const TOTAL_ROUNDS = 5;
-const APP_TITLE = "Sakhaguessr";
-const LEADERBOARD_TEXT: Record<
-  Language,
-  {
-    playerNamePlaceholder: string;
-    saveResult: string;
-    savingResult: string;
-    resultSaved: string;
-    leaderboardTitle: string;
-    leaderboardLoading: string;
-    leaderboardEmpty: string;
-    nameTooShort: string;
-    leaderboardLoadError: string;
-    saveResultError: string;
-    saveResultSuccess: string;
-  }
-> = {
-  ru: {
-    playerNamePlaceholder: "Ваше имя",
-    saveResult: "Сохранить результат",
-    savingResult: "Сохранение...",
-    resultSaved: "Сохранено",
-    leaderboardTitle: "Лидерборд",
-    leaderboardLoading: "Загрузка...",
-    leaderboardEmpty: "Пока записей нет",
-    nameTooShort: "Введите имя хотя бы из 2 символов",
-    leaderboardLoadError: "Не удалось загрузить лидерборд",
-    saveResultError: "Не удалось сохранить результат",
-    saveResultSuccess: "Результат сохранен",
-  },
-  sah: {
-    playerNamePlaceholder: "Ваше имя",
-    saveResult: "Сохранить результат",
-    savingResult: "Сохранение...",
-    resultSaved: "Сохранено",
-    leaderboardTitle: "Лидерборд",
-    leaderboardLoading: "Загрузка...",
-    leaderboardEmpty: "Пока записей нет",
-    nameTooShort: "Введите имя хотя бы из 2 символов",
-    leaderboardLoadError: "Не удалось загрузить лидерборд",
-    saveResultError: "Не удалось сохранить результат",
-    saveResultSuccess: "Результат сохранен",
-  },
-};
-
 type RoundSummary = {
   roundNumber: number;
   score: number;
   distanceKm: number;
-};
-
-const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
-  }
-
-  return fallback;
-};
-
-const randomLatLngInBounds = (bounds: Bounds): LatLng => ({
-  lat: randomInRange(bounds.minLat, bounds.maxLat),
-  lng: randomInRange(bounds.minLng, bounds.maxLng),
-});
-
-const normalizeRegionName = (value: string | null | undefined) =>
-  (value ?? "")
-    .toLowerCase()
-    .replace(/[^a-zа-яё0-9]+/giu, " ")
-    .trim();
-
-const isSakhaRegion = (value: string | null | undefined) => {
-  const normalized = normalizeRegionName(value);
-  return normalized.includes("саха") || normalized.includes("якут");
-};
-
-const isWithinBounds = (location: LatLng, bounds: Bounds) =>
-  location.lat >= bounds.minLat &&
-  location.lat <= bounds.maxLat &&
-  location.lng >= bounds.minLng &&
-  location.lng <= bounds.maxLng;
-
-const toRad = (value: number) => (value * Math.PI) / 180;
-
-const haversineKm = (a: LatLng, b: LatLng) => {
-  const r = 6371;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  return 2 * r * Math.asin(Math.sqrt(h));
-};
-
-const scoreFromDistance = (distanceKm: number) => Math.max(0, 5000 - Math.round(distanceKm * 5));
-
-const getApiKeyCandidateUrls = () => {
-  const candidates = [
-    new URL("api-key.txt", document.baseURI).toString(),
-    `${window.location.origin}/api-key.txt`,
-  ];
-
-  const seen = new Set<string>();
-  return candidates.filter((candidate) => {
-    if (seen.has(candidate)) {
-      return false;
-    }
-    seen.add(candidate);
-    return true;
-  });
-};
-
-const getYandexMapsApiKeyFromEnv = () => {
-  const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY?.trim();
-  if (!apiKey || apiKey === "your-yandex-maps-api-key") {
-    return null;
-  }
-
-  return apiKey;
-};
-
-const getYandexMapsApiKey = async () => {
-  const envApiKey = getYandexMapsApiKeyFromEnv();
-  if (envApiKey) {
-    return envApiKey;
-  }
-
-  const candidateUrls = getApiKeyCandidateUrls();
-
-  for (const url of candidateUrls) {
-    try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) {
-        continue;
-      }
-
-      const apiKey = (await response.text()).trim();
-      if (apiKey) {
-        return apiKey;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  throw new Error(
-    `Не удалось загрузить API-ключ. Укажите VITE_YANDEX_MAPS_API_KEY или файл api-key.txt. Проверенные пути: ${candidateUrls.join(", ")}`
-  );
-};
-
-const loadYandexMaps = async () => {
-  if (window.ymaps) {
-    return new Promise<any>((resolve) => {
-      window.ymaps?.ready(() => resolve(window.ymaps));
-    });
-  }
-
-  const apiKey = await getYandexMapsApiKey();
-  const scriptSrc = `${YANDEX_MAPS_URL}&apikey=${encodeURIComponent(apiKey)}`;
-
-  return new Promise<any>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${scriptSrc}"]`) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", () => window.ymaps?.ready(() => resolve(window.ymaps)));
-      existing.addEventListener("error", () => reject(new Error("Yandex Maps failed to load")));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = scriptSrc;
-    script.async = true;
-    script.onload = () => window.ymaps?.ready(() => resolve(window.ymaps));
-    script.onerror = () => reject(new Error("Yandex Maps failed to load"));
-    document.head.appendChild(script);
-  });
-};
-
-const metersToDelta = (meters: number, lat: number) => {
-  const deltaLat = meters / 111320;
-  const cosLat = Math.cos(toRad(lat));
-  const safeCosLat = Math.abs(cosLat) < 0.0001 ? 0.0001 : cosLat;
-  const deltaLng = meters / (111320 * safeCosLat);
-  return { deltaLat, deltaLng };
-};
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-const randomLatLngNearSeed = (seed: SeedLocation, bounds: Bounds): LatLng => {
-  const angle = Math.random() * Math.PI * 2;
-  const distance = Math.sqrt(Math.random()) * seed.radiusMeters;
-  const northOffsetMeters = Math.cos(angle) * distance;
-  const eastOffsetMeters = Math.sin(angle) * distance;
-  const lat = seed.lat + northOffsetMeters / 111320;
-  const lng = seed.lng + eastOffsetMeters / (111320 * Math.max(Math.cos(toRad(seed.lat)), 0.0001));
-
-  return {
-    lat: clamp(lat, bounds.minLat, bounds.maxLat),
-    lng: clamp(lng, bounds.minLng, bounds.maxLng),
-  };
-};
-
-const generateCandidateLocation = (mode: GameMode, bounds: Bounds) => {
-  if (mode === "SAKHA") {
-    const seed = SAKHA_LOCATION_SEEDS[Math.floor(Math.random() * SAKHA_LOCATION_SEEDS.length)];
-    return randomLatLngNearSeed(seed, bounds);
-  }
-  return randomLatLngInBounds(bounds);
-};
-
-const mapYandexKindToTypes = (kind: string | undefined): string[] => {
-  switch (kind) {
-    case "locality":
-      return ["locality", "political"];
-    case "district":
-      return ["sublocality", "neighborhood", "administrative_area_level_3", "political"];
-    case "area":
-      return ["administrative_area_level_3", "political"];
-    case "province":
-      return ["administrative_area_level_1", "political"];
-    case "country":
-      return ["country", "political"];
-    default:
-      return [];
-  }
-};
-
-class StreetViewService {
-  private ymaps: any;
-
-  constructor(ymaps: any) {
-    this.ymaps = ymaps;
-  }
-
-  async getPanorama(request: { location: LatLng; radius: number; source: "OUTDOOR" }) {
-    const panoramas = await this.ymaps.panorama.locate([request.location.lat, request.location.lng], {
-      radius: request.radius,
-      layer: "yandex#panorama",
-    });
-
-    if (!panoramas || panoramas.length === 0) {
-      return { status: "ZERO_RESULTS" as const };
-    }
-
-    const pano = panoramas[0];
-    const position = pano.getPosition();
-    return {
-      status: "OK" as const,
-      location: { lat: position[0], lng: position[1] },
-      panorama: pano,
-    };
-  }
-}
-
-class PlacesService {
-  private ymaps: any;
-  private nearbyCache = new Map<string, { results: PlaceResult[]; status: "OK" | "ZERO_RESULTS" }>();
-
-  constructor(ymaps: any) {
-    this.ymaps = ymaps;
-  }
-
-  async nearbySearch(request: { location: LatLng; radius: number }) {
-    const cacheKey = [
-      request.location.lat.toFixed(4),
-      request.location.lng.toFixed(4),
-      Math.round(request.radius),
-    ].join(":");
-
-    const cached = this.nearbyCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const { deltaLat, deltaLng } = metersToDelta(request.radius, request.location.lat);
-    const bbox = [
-      [request.location.lat - deltaLat, request.location.lng - deltaLng],
-      [request.location.lat + deltaLat, request.location.lng + deltaLng],
-    ];
-
-    const geoObjects = await this.ymaps.geocode([request.location.lat, request.location.lng], {
-      results: 10,
-      bbox,
-      rspn: 1,
-    });
-
-    const results: PlaceResult[] = [];
-    geoObjects.geoObjects.each((geoObject: any) => {
-      const meta = geoObject.properties.get("metaDataProperty.GeocoderMetaData");
-      const kind = meta?.kind as string | undefined;
-      const name = meta?.text || geoObject.properties.get("name");
-      const types = mapYandexKindToTypes(kind);
-      results.push({ name, types });
-    });
-
-    const response = {
-      results,
-      status: results.length > 0 ? ("OK" as const) : ("ZERO_RESULTS" as const),
-    };
-
-    this.nearbyCache.set(cacheKey, response);
-    return response;
-  }
-}
-
-const extractAdminLevel1 = (geocodeResult: any) => {
-  const meta = geocodeResult?.properties?.get("metaDataProperty.GeocoderMetaData");
-  const components = meta?.Address?.Components || [];
-
-  for (const component of components) {
-    if (component.kind === "province") {
-      return component.name as string;
-    }
-  }
-
-  for (const component of components) {
-    if (component.kind === "area") {
-      return component.name as string;
-    }
-  }
-
-  return meta?.text ?? null;
 };
 
 const App = () => {
@@ -505,7 +56,6 @@ const App = () => {
   const [isSubmittingResult, setIsSubmittingResult] = useState(false);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
-
 
   const t = UI_TEXT[language];
   const leaderboardText = LEADERBOARD_TEXT[language];
@@ -734,54 +284,60 @@ const App = () => {
       setLeaderboardError(null);
       const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
       setLeaderboard(data.items);
-    } catch (error) {
-      setLeaderboardError(error instanceof Error ? error.message : leaderboardText.leaderboardLoadError);
+    } catch (loadError) {
+      setLeaderboardError(getErrorMessage(loadError, leaderboardText.leaderboardLoadError));
     } finally {
       setIsLoadingLeaderboard(false);
     }
   }, [gameMode, leaderboardText.leaderboardLoadError]);
 
-
   const handleSaveResult = useCallback(async () => {
-  if (!gameMode || roundHistory.length === 0 || savedGameId) {
-    return;
-  }
+    if (!gameMode || roundHistory.length === 0 || savedGameId) {
+      return;
+    }
 
-  const trimmedName = playerName.trim();
-  if (trimmedName.length < 2) {
-    setSaveResultFeedback("Введите имя хотя бы из 2 символов");
-    return;
-  }
+    const trimmedName = playerName.trim();
+    if (trimmedName.length < 2) {
+      setSaveResultFeedback(leaderboardText.nameTooShort);
+      return;
+    }
 
-  try {
-    setIsSubmittingResult(true);
-    setSaveResultFeedback(null);
-    setLeaderboardError(null);
+    try {
+      setIsSubmittingResult(true);
+      setSaveResultFeedback(null);
+      setLeaderboardError(null);
 
-    const savedGame = await submitGameResult({
-      playerName: trimmedName,
-      mode: gameMode,
-      rounds: roundHistory.map((round) => ({
-        roundNumber: round.roundNumber,
-        score: round.score,
-        distanceKm: round.distanceKm,
-      })),
-    });
+      const savedGame = await submitGameResult({
+        playerName: trimmedName,
+        mode: gameMode,
+        rounds: roundHistory.map((round) => ({
+          roundNumber: round.roundNumber,
+          score: round.score,
+          distanceKm: round.distanceKm,
+        })),
+      });
 
-    setSavedGameId(savedGame.id);
-    setSaveResultFeedback("Результат сохранён");
+      setSavedGameId(savedGame.id);
+      setSaveResultFeedback(leaderboardText.saveResultSuccess);
 
-    setIsLoadingLeaderboard(true);
-    const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
-    setLeaderboard(data.items);
-  } catch (error) {
-    setLeaderboardError(error instanceof Error ? error.message : "Не удалось сохранить результат");
-  } finally {
-    setIsSubmittingResult(false);
-    setIsLoadingLeaderboard(false);
-  }
-}, [gameMode, playerName, roundHistory, savedGameId]);
-
+      setIsLoadingLeaderboard(true);
+      const data = await fetchLeaderboard({ mode: gameMode, limit: 20 });
+      setLeaderboard(data.items);
+    } catch (saveError) {
+      setLeaderboardError(getErrorMessage(saveError, leaderboardText.saveResultError));
+    } finally {
+      setIsSubmittingResult(false);
+      setIsLoadingLeaderboard(false);
+    }
+  }, [
+    gameMode,
+    leaderboardText.nameTooShort,
+    leaderboardText.saveResultError,
+    leaderboardText.saveResultSuccess,
+    playerName,
+    roundHistory,
+    savedGameId,
+  ]);
 
   const handleShareResults = useCallback(async () => {
     if (!gameMode || roundHistory.length === 0) {
@@ -810,8 +366,8 @@ const App = () => {
       }
 
       setShareFeedback(t.shareSuccess);
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+    } catch (shareError) {
+      if (shareError instanceof Error && shareError.name === "AbortError") {
         return;
       }
 
@@ -825,11 +381,10 @@ const App = () => {
   }, [averageScore, bestRound, gameMode, roundHistory.length, t, totalDistance, totalXP]);
 
   useEffect(() => {
-  if (gameState === "FINAL_RESULT" && gameMode) {
-    void loadLeaderboard();
+    if (gameState === "FINAL_RESULT" && gameMode) {
+      void loadLeaderboard();
     }
   }, [gameMode, gameState, loadLeaderboard]);
-
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -1142,4 +697,3 @@ const App = () => {
 };
 
 export default App;
-

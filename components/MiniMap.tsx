@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BOUNDS_BY_MODE, type GameMode, type GameState, type LatLng } from "../lib/gameConfig.ts";
+import { BOUNDS_BY_MODE } from "../lib/gameConstants.ts";
+import type { GameMode, GameState, LatLng } from "../lib/gameTypes.ts";
 
 type MiniMapProps = {
   ymaps: any;

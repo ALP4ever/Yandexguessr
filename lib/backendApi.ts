@@ -1,4 +1,4 @@
-import type { GameMode } from "./gameConfig.ts";
+import type { GameMode } from "./gameTypes.ts";
 
 export type GameRoundPayload = {
   roundNumber: number;

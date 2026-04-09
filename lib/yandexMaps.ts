@@ -1,4 +1,4 @@
-import type { LatLng, PlaceResult } from "./gameConfig.ts";
+import type { LatLng, PlaceResult } from "./gameTypes.ts";
 import { getPlaceTypesFromYandexKind, metersToDelta } from "./mapUtils.ts";
 
 declare global {
