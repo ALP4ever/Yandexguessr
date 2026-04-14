@@ -17,7 +17,7 @@ const SettingsPanel = ({
   onToggleSettings,
   onSelectLanguage,
 }: SettingsPanelProps) => (
-  <div className="absolute bottom-6 left-6 z-30 w-[min(92vw,320px)]">
+  <div className="w-[min(92vw,320px)]">
     <div className="flex flex-col items-start gap-3">
       {settingsOpen && (
         <div className="glass-panel rounded-3xl px-5 py-4 text-white shadow-2xl">

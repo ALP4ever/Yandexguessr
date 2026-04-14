@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   AppHeader,
   FinalResultsOverlay,
@@ -8,15 +8,21 @@ import {
   SettingsPanel,
   StreetView,
 } from "./components/index.ts";
+import { ExpandMapIcon } from "./components/icons/mapControlIcons.tsx";
 import { useGameSession } from "./hooks/useGameSession.ts";
 import { useLeaderboard } from "./hooks/useLeaderboard.ts";
 import { useYandexMaps } from "./hooks/useYandexMaps.ts";
-import type { Language } from "./lib/gameTypes.ts";
+import type { GameState, Language } from "./lib/gameTypes.ts";
 import { LEADERBOARD_TEXT, UI_TEXT } from "./lib/uiText.ts";
 
 const App = () => {
   const [language, setLanguage] = useState<Language>("ru");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isTouchUi, setIsTouchUi] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(hover: none)").matches : false
+  );
+  const [mobileMinimapDismissed, setMobileMinimapDismissed] = useState(false);
+  const prevGameStateRef = useRef<GameState | null>(null);
 
   const t = UI_TEXT[language];
   const leaderboardText = LEADERBOARD_TEXT[language];
@@ -76,6 +82,35 @@ const App = () => {
   }, [syncLoadingMessage]);
 
   useEffect(() => {
+    const mq = window.matchMedia("(hover: none)");
+    const sync = () => setIsTouchUi(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!gameMode) {
+      setMobileMinimapDismissed(false);
+      prevGameStateRef.current = null;
+    }
+  }, [gameMode]);
+
+  useEffect(() => {
+    if (!isTouchUi) {
+      prevGameStateRef.current = gameState;
+      return;
+    }
+    const prev = prevGameStateRef.current;
+    if (gameState === "RESULT" && prev === "LOADING_RESULT") {
+      setMobileMinimapDismissed(false);
+    } else if (gameState === "GUESSING" && (prev === "RESULT" || prev === "MODE_SELECT")) {
+      setMobileMinimapDismissed(false);
+    }
+    prevGameStateRef.current = gameState;
+  }, [gameState, isTouchUi]);
+
+  useEffect(() => {
     if (gameState === "FINAL_RESULT" && gameMode) {
       void loadLeaderboard();
     }
@@ -128,13 +163,25 @@ const App = () => {
     <div className="relative h-full w-full">
       <AppHeader uiText={t} gameMode={gameMode} gameState={gameState} currentRound={currentRound} totalXP={totalXP} />
 
-      <SettingsPanel
-        uiText={t}
-        language={language}
-        settingsOpen={settingsOpen}
-        onToggleSettings={() => setSettingsOpen((prev) => !prev)}
-        onSelectLanguage={setLanguage}
-      />
+      <div className="absolute bottom-6 left-6 z-30 flex flex-col items-start gap-3">
+        {gameMode && ymapsApi && isTouchUi && mobileMinimapDismissed && (
+          <button
+            type="button"
+            aria-label={t.expandMap}
+            onClick={() => setMobileMinimapDismissed(false)}
+            className="glass-panel flex h-12 w-12 items-center justify-center rounded-full text-white shadow-2xl transition hover:scale-[1.04]"
+          >
+            <ExpandMapIcon />
+          </button>
+        )}
+        <SettingsPanel
+          uiText={t}
+          language={language}
+          settingsOpen={settingsOpen}
+          onToggleSettings={() => setSettingsOpen((prev) => !prev)}
+          onSelectLanguage={setLanguage}
+        />
+      </div>
 
       {gameState === "MODE_SELECT" && (
         <ModeSelectOverlay uiText={t} isMapReady={isMapReady} onSelectMode={handleModeSelect} />
@@ -186,17 +233,23 @@ const App = () => {
             />
           </div>
 
-          <MiniMap
-            ymaps={ymapsApi}
-            mode={gameMode}
-            targetLocation={targetLocation}
-            guessLocation={guessLocation}
-            gameState={gameState}
-            onGuess={setGuessLocation}
-            onConfirm={confirmGuess}
-            confirmDisabled={!guessLocation || gameState !== "GUESSING"}
-            confirmLabel={t.confirm}
-          />
+          {(!isTouchUi || !mobileMinimapDismissed) && (
+            <MiniMap
+              ymaps={ymapsApi}
+              mode={gameMode}
+              targetLocation={targetLocation}
+              guessLocation={guessLocation}
+              gameState={gameState}
+              onGuess={setGuessLocation}
+              onConfirm={confirmGuess}
+              confirmDisabled={!guessLocation || gameState !== "GUESSING"}
+              confirmLabel={t.confirm}
+              expandMapLabel={t.expandMap}
+              collapseMapLabel={t.collapseMap}
+              closeMapLabel={t.closeMap}
+              onTouchFullDismiss={isTouchUi ? () => setMobileMinimapDismissed(true) : undefined}
+            />
+          )}
         </div>
       )}
 

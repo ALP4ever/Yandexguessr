@@ -26,6 +26,9 @@ export type MainUiText = {
   nextRound: string;
   finishGame: string;
   confirm: string;
+  expandMap: string;
+  collapseMap: string;
+  closeMap: string;
   finalResults: string;
   roundsComplete: string;
   averageScore: string;
@@ -78,6 +81,9 @@ export const UI_TEXT: Record<Language, MainUiText> = {
     nextRound: "Следующий раунд (Space)",
     finishGame: "Показать финальную статистику",
     confirm: "ПОДТВЕРДИТЬ ОТВЕТ",
+    expandMap: "Развернуть карту",
+    collapseMap: "Уменьшить карту",
+    closeMap: "Закрыть карту",
     finalResults: "Финальные результаты",
     roundsComplete: "Раунд завершён",
     averageScore: "Средний результат",
@@ -114,6 +120,9 @@ export const UI_TEXT: Record<Language, MainUiText> = {
     nextRound: "Аныгы раунд (Space)",
     finishGame: "Түмүк",
     confirm: "ЭППИЭТИН БИГЭЛЭЭ",
+    expandMap: "Картаны улаатыннар",
+    collapseMap: "Картаны кыччат",
+    closeMap: "Картаны сап",
     finalResults: "Түмүк",
     roundsComplete: "Хас раунд бүттэ",
     averageScore: "Орто баал",

@@ -18,17 +18,10 @@ export const BOUNDS_BY_MODE: Record<GameMode, Bounds> = {
 };
 
 export const SAKHA_LOCATION_SEEDS: SeedLocation[] = [
-  { lat: 62.0272, lng: 129.7326, radiusMeters: 12000 },
-  { lat: 61.4844, lng: 129.1481, radiusMeters: 8000 },
-  { lat: 56.6546, lng: 124.7203, radiusMeters: 9000 },
-  { lat: 58.6031, lng: 125.3894, radiusMeters: 9000 },
-  { lat: 59.6483, lng: 112.7415, radiusMeters: 9000 },
-  { lat: 60.726, lng: 114.9541, radiusMeters: 9000 },
-  { lat: 63.7553, lng: 121.6247, radiusMeters: 7000 },
-  { lat: 63.286, lng: 118.3319, radiusMeters: 7000 },
-  { lat: 60.3742, lng: 120.435, radiusMeters: 7000 },
-  { lat: 58.9681, lng: 126.2871, radiusMeters: 7000 },
-  { lat: 61.4626, lng: 128.4747, radiusMeters: 6000 },
+  // Крупные города
+
+  { lat: 62.15, lng: 117.63, radiusMeters: 6000 },  // Сунтар
+
 ];
 
 export const YAKUTSK_LOCATION_SEEDS: SeedLocation[] = [

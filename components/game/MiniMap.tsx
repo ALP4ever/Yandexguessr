@@ -9,6 +9,7 @@ import type {
   YandexPlacemark,
   YandexPolyline,
 } from "../../lib/yandexMaps.ts";
+import { CollapseMapIcon, ExpandMapIcon } from "../icons/mapControlIcons.tsx";
 
 type MiniMapProps = {
   ymaps: YandexMapsApi;
@@ -20,6 +21,10 @@ type MiniMapProps = {
   onConfirm: () => void;
   confirmDisabled: boolean;
   confirmLabel: string;
+  expandMapLabel: string;
+  collapseMapLabel: string;
+  closeMapLabel: string;
+  onTouchFullDismiss?: () => void;
 };
 
 const MiniMap = ({
@@ -32,8 +37,11 @@ const MiniMap = ({
   onConfirm,
   confirmDisabled,
   confirmLabel,
+  expandMapLabel,
+  collapseMapLabel,
+  closeMapLabel,
+  onTouchFullDismiss,
 }: MiniMapProps) => {
-  const collapsedSize = { width: 320, height: 220 };
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<YandexMapInstance | null>(null);
   const guessPlacemarkRef = useRef<YandexPlacemark | null>(null);
@@ -41,6 +49,10 @@ const MiniMap = ({
   const polylineRef = useRef<YandexPolyline | null>(null);
   const clickHandlerRef = useRef<((event: YandexEvent) => void) | null>(null);
   const [hovered, setHovered] = useState(false);
+  const [isTouchPrimary, setIsTouchPrimary] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(hover: none)").matches : false
+  );
+  const [touchGuessExpanded, setTouchGuessExpanded] = useState(false);
   const [viewportSize, setViewportSize] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -52,7 +64,17 @@ const MiniMap = ({
     [modeBounds]
   );
   const startZoom = mode === "YAKUTSK" ? 10 : 3;
-  const expanded = hovered || gameState === "RESULT";
+  const expanded =
+    gameState === "RESULT" ||
+    (!isTouchPrimary && hovered) ||
+    (isTouchPrimary && gameState === "GUESSING" && touchGuessExpanded);
+  const collapsedSize = useMemo(
+    () => ({
+      width: Math.min(320, Math.max(200, viewportSize.width - 48)),
+      height: 220,
+    }),
+    [viewportSize.width]
+  );
   const expandedSize = useMemo(
     () => ({
       width: Math.min(viewportSize.width * 0.92, 920),
@@ -91,6 +113,18 @@ const MiniMap = ({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none)");
+    const sync = () => setIsTouchPrimary(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    setTouchGuessExpanded(false);
+  }, [gameState]);
 
   useEffect(() => {
     if (!ymaps || !mapRef.current || mapInstanceRef.current) {
@@ -276,11 +310,47 @@ const MiniMap = ({
   }, [gameState, mapSize.height, mapSize.width]);
 
   const mapClass = `mini-map map-transition ${expanded ? "expanded" : ""}`;
+  const showTouchExpandMap = isTouchPrimary && gameState === "GUESSING" && !expanded;
+  const showTouchCollapseMap = isTouchPrimary && gameState === "GUESSING" && expanded;
+  const showTouchClose = isTouchPrimary && Boolean(onTouchFullDismiss);
 
   return (
     <div className="relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <div className={mapClass} style={mapSize}>
         <div ref={mapRef} className="h-full w-full" />
+        {showTouchClose && (
+          <button
+            type="button"
+            className="absolute left-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-xl leading-none text-slate-800 shadow-md ring-1 ring-slate-200/80"
+            aria-label={closeMapLabel}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTouchFullDismiss?.();
+            }}
+          >
+            ×
+          </button>
+        )}
+        {showTouchExpandMap && (
+          <button
+            type="button"
+            className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-md ring-1 ring-slate-200/80"
+            aria-label={expandMapLabel}
+            onClick={() => setTouchGuessExpanded(true)}
+          >
+            <ExpandMapIcon />
+          </button>
+        )}
+        {showTouchCollapseMap && (
+          <button
+            type="button"
+            className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-md ring-1 ring-slate-200/80"
+            aria-label={collapseMapLabel}
+            onClick={() => setTouchGuessExpanded(false)}
+          >
+            <CollapseMapIcon />
+          </button>
+        )}
         {gameState === "GUESSING" && (
           <div className="absolute inset-x-4 bottom-4 flex items-center justify-center">
             <button

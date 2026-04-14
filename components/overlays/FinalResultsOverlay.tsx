@@ -46,8 +46,8 @@ const FinalResultsOverlay = ({
   onShareResults,
   onPlayAgain,
 }: FinalResultsOverlayProps) => (
-  <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-6">
-    <div className="glass-panel w-full max-w-2xl rounded-3xl px-8 py-8 text-white shadow-2xl">
+  <div className="absolute inset-0 z-40 flex min-h-0 flex-col bg-slate-950/90 md:items-center md:justify-center md:bg-slate-950/75 md:p-6">
+    <div className="glass-panel flex min-h-0 w-full flex-1 flex-col overflow-y-auto rounded-none px-4 py-5 text-white shadow-none sm:px-6 md:max-h-[min(90vh,920px)] md:max-w-2xl md:flex-none md:rounded-3xl md:px-8 md:py-8 md:shadow-2xl">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-[0.2em] text-white/60">{uiText.finalResults}</div>
@@ -92,18 +92,18 @@ const FinalResultsOverlay = ({
         ))}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <input
           value={playerName}
           onChange={(event) => setPlayerName(event.target.value)}
           placeholder={leaderboardText.playerNamePlaceholder}
-          className="min-w-[220px] flex-1 rounded-xl bg-white/10 px-4 py-3 text-white outline-none placeholder:text-white/50"
+          className="min-w-0 w-full rounded-xl bg-white/10 px-4 py-3 text-white outline-none placeholder:text-white/50 sm:min-w-[220px] sm:flex-1"
           maxLength={24}
         />
         <button
           onClick={onSaveResult}
           disabled={isSubmittingResult || Boolean(savedGameId)}
-          className="rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow transition disabled:cursor-not-allowed disabled:opacity-70"
+          className="w-full shrink-0 rounded-full bg-emerald-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow transition disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
         >
           {isSubmittingResult
             ? leaderboardText.savingResult
@@ -141,18 +141,18 @@ const FinalResultsOverlay = ({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-white/70">{shareFeedback ?? ""}</div>
-        <div className="flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="order-2 text-sm text-white/70 sm:order-1">{shareFeedback ?? ""}</div>
+        <div className="order-1 flex w-full flex-col gap-3 sm:order-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <button
             onClick={onShareResults}
-            className="rounded-full bg-white/90 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
+            className="w-full rounded-full bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02] sm:w-auto"
           >
             {uiText.shareResult}
           </button>
           <button
             onClick={onPlayAgain}
-            className="rounded-full bg-sky-300 px-5 py-2 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02]"
+            className="w-full rounded-full bg-sky-300 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow transition hover:scale-[1.02] sm:w-auto"
           >
             {uiText.playAgain}
           </button>

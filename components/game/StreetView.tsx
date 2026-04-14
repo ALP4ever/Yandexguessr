@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import type { LatLng } from "../../lib/gameTypes.ts";
+import { stripPanoramaGameOverlays } from "../../lib/panoramaUtils.ts";
 import type { YandexPanorama, YandexMapsApi, YandexPanoramaPlayer } from "../../lib/yandexMaps.ts";
 
 type StreetViewProps = {
@@ -51,6 +52,8 @@ const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewPro
           throw new Error("Panorama not found");
         }
 
+        stripPanoramaGameOverlays(panoramaToRender);
+
         const player = new ymaps.panorama.Player(container, panoramaToRender, {
           controls: [],
           direction: [0, 0],
@@ -58,7 +61,16 @@ const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewPro
           addressControl: false,
           showRoadLabels: false,
           hotkeysEnabled: false,
+          suppressMapOpenBlock: true,
         });
+
+        try {
+          player.events.add("panoramachange", () => {
+            stripPanoramaGameOverlays(player.getPanorama());
+          });
+        } catch {
+          /* panoramachange is undocumented; safe to skip */
+        }
 
         if (!cancelled) {
           playerRef.current = player;
@@ -86,13 +98,6 @@ const StreetView = ({ ymaps, location, panorama, hidden = false }: StreetViewPro
   return (
     <div className={wrapperClassName} aria-hidden={hidden}>
       <div ref={containerRef} className="h-full w-full" />
-      {!hidden && (
-        <div
-          className="pointer-events-none absolute left-0 top-0 z-20 h-20 w-[20rem] rounded-br-[1.75rem] bg-slate-950 shadow-2xl"
-          aria-hidden="true"
-          title="Overlay to block the built-in Yandex Maps link"
-        />
-      )}
     </div>
   );
 };

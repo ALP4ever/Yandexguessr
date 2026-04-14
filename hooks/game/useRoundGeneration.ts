@@ -81,11 +81,9 @@ export const useRoundGeneration = ({
           return generateValidLocation(mode, attempt + 1);
         }
 
-        const isPopulated = nearby.results.some((result: { types: string[] }) => isAllowedPopulatedPlace(result.types));
+        
 
-        if (!isPopulated) {
-          return generateValidLocation(mode, attempt + 1);
-        }
+
 
         return {
           location: panorama.location,

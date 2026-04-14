@@ -31,6 +31,10 @@ export type YandexPanorama = {
 
 export type YandexPanoramaPlayer = {
   destroy(): void;
+  getPanorama(): YandexPanorama;
+  events: {
+    add(type: string, handler: () => void): void;
+  };
 };
 
 export type YandexPlacemark = {
@@ -82,6 +86,7 @@ export type YandexMapsApi = {
         addressControl: boolean;
         showRoadLabels: boolean;
         hotkeysEnabled: boolean;
+        suppressMapOpenBlock?: boolean;
       }
     ) => YandexPanoramaPlayer;
   };
